@@ -37,7 +37,7 @@ def merge_sessions(datadir,animal_list,filestr_cond, datestr_format='%yy%mm%dd')
                             <= datetime.strptime(date_range[1], '%d/%m/%Y'):
                         try:
                             loaded_file = pd.read_csv(os.path.join(root,file), delimiter=',')
-                            if len(loaded_file)>0 :
+                            if len(loaded_file) >0:
                                 name_series = [animal_name] * loaded_file.shape[0]
                                 date_series = [session_date] * loaded_file.shape[0]
                                 loaded_file['Name'] = name_series
@@ -93,18 +93,24 @@ def merge_sessions(datadir,animal_list,filestr_cond, datestr_format='%yy%mm%dd')
 
 
 
-animals = [#'DO12',
-           #'DO13',
-           #'DO14',
-           'DO15',
-           'DO16',
-           'DO17',
-           #'DO18',
-           'DO19',
-           'DO20']
+animals = [
+            #'DO12',
+            #'DO13',
+            #'DO14',
+            # 'DO15',
+            # 'DO16',
+            # 'DO17',
+            #'DO18',
+            'DO19',
+            # 'DO20',
+            # 'DO23',
+            # 'DO24',
+            # 'DO25',
+            # 'DO26'
+]
 
 datadir = r'C:\bonsai\data\Dammy'
-date_range =['15/10/2020', '15/10/2020']
+date_range =['20/11/2020', '20/11/2020']
 
 
 # params = merge_sessions(datadir,animals,'params')
@@ -125,10 +131,12 @@ trial_data = pd.concat(trial_data, sort=False, axis=0)
 # plt.plot(do17_stage2_cum_mean.values)
 
 performance = []
+ntrial_list = []
 for animal in animals:
     stim_perfomance = []
+    animal_df = trial_data.loc[animal]
+    ntrial_list.append(animal_df.shape[0])
     for stim in range(2,7):
-        animal_df = trial_data.loc[animal]
         stim_df = animal_df[animal_df['Stim1_Duration'] == stim]['Trial_Outcome']
         stim_correct = stim_df == 1
         stim_perfomance.append(stim_correct.mean())
@@ -138,12 +146,13 @@ for animal in animals:
 
 perfomance_plot, perfomance_ax = plt.subplots(1,1)
 for i, animal in enumerate(animals):
-    perfomance_ax.plot(np.arange(2,7),performance[i],label=animal,color=marker_colors[i])
+    perfomance_ax.plot(np.arange(2,7),performance[i],label=f'{animal},{ntrial_list[i]} Trials',color=marker_colors[i])
 perfomance_ax.set_ylim((0,1))
 perfomance_ax.set_ylabel('Fraction Correct')
 perfomance_ax.set_xlabel('Stimulus Duration')
 perfomance_ax.set_xticks(range(2,7))
 perfomance_ax.legend()
+perfomance_ax.set_title(f'Peformance for all trials {date_range[0]} to {date_range[1]}')
 
 reaction_plot, reaction_ax = plt.subplots()
 reaction_times = []
@@ -167,3 +176,15 @@ reaction_ax.set_xticks([])
 reaction_ax.legend(loc=9,ncol=len(animals))
 reaction_ax.set_ylabel('Reaction Time (seconds)')
 reaction_ax.axhline(0.5,linestyle='--',color='grey',linewidth=0.5)
+
+total_valvetime = animal_correct_trials['ValveTime'].sum()
+print(total_valvetime*.112)
+
+# def cal_step_mean(start,step,iters,thresh):
+#     amount = start
+#     tally = 0
+#     for i in range(iters):
+#         tally+=amount
+#         if i%thresh ==0 and i>0:
+#             amount+=step
+#     return tally, tally/iters
