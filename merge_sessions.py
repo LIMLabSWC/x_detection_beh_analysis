@@ -110,7 +110,7 @@ animals = [
 ]
 
 datadir = r'C:\bonsai\data\Dammy'
-date_range =['02/11/2020', '20/11/2020']
+date_range =['26/10/2020', '20/11/2020']
 
 
 # params = merge_sessions(datadir,animals,'params')
@@ -154,7 +154,7 @@ perfomance_ax.set_xticks(range(2,7))
 perfomance_ax.legend()
 perfomance_ax.set_title(f'Peformance for all trials {date_range[0]} to {date_range[1]}')
 
-reaction_plot, reaction_ax = plt.subplots(2)
+reaction_plot, reaction_ax = plt.subplots()
 reaction_times = []
 
 for animal in animals:
@@ -168,14 +168,15 @@ for animal in animals:
     animal_correct_trials['Reaction_Time'] = copy(reaction_series)
     reaction_times.append(reaction_series)
 
-for i, animal in enumerate(animals):
-    x_axis = np.full(len(reaction_times[i]),i)
-    reaction_seconds = np.array([t.total_seconds() for t in reaction_times[i]])
-    reaction_ax[0].scatter(x_axis, reaction_seconds,label=animal,s=20, facecolors='none',edgecolor=marker_colors[i])
-    reaction_ax[0].scatter(i,reaction_seconds.mean(),marker='x',color='k',s=50)
+# for i, animal in enumerate(animals):
+#     x_axis = np.full(len(reaction_times[i]),i)
+#     reaction_seconds = np.array([t.total_seconds() for t in reaction_times[i]])
+#     reaction_ax.scatter(x_axis, reaction_seconds,label=animal,s=20, facecolors='none',edgecolor=marker_colors[i])
+#     reaction_ax.scatter(i,reaction_seconds.mean(),marker='x',color='k',s=50)
 
 # plot pretone dur vs reaction time, violation rate
 pre_vs_reaction_fig, pre_vs_reaction_ax = plt.subplots()
+pre_vs_viol_fig, pre_vs_viol_ax = plt.subplots()
 # get reaction time for full trial data df
 trial_start_series = np.array([datetime.strptime(trial_start[:-1],'%H:%M:%S.%f') for trial_start in trial_data['Trial_Start']])
 trial_end_series = np.array([datetime.strptime(trial_end[:-1],'%H:%M:%S.%f') for trial_end in trial_data['Trial_End']])
@@ -185,41 +186,121 @@ reaction_series = trial_end_series-trial_start_series-stimdur_series
 rt_float = [t.total_seconds() for t in reaction_series]
 trial_data['Reaction_Time'] = copy(rt_float)
 
+# reaction time plot
+for i, animal in enumerate(animals):
+    x_axis = np.full(len(reaction_times[i]),i)
+    reaction_seconds = np.array([t.total_seconds() for t in reaction_times[i]])
+    reaction_ax.scatter(x_axis, reaction_seconds,label=animal,s=20, facecolors='none',edgecolor=marker_colors[i])
+    reaction_ax.scatter(i,reaction_seconds.mean(),marker='x',color='k',s=50)
+
+
+reaction_ax.set_xticks([])
+reaction_ax.set_xlabel('')
+reaction_ax.legend(loc=9,ncol=len(animals))
+reaction_ax.set_ylabel('Reaction Time (seconds)')
+reaction_ax.axhline(0.5,linestyle='--',color='grey',linewidth=0.5)
+
+# stage2 reaction time only
+stage2_stimdur_series = np.array([timedelta(seconds=t) for t in trial_data['Stim1_Duration']])
+stage2_reactions = trial_end_series-trial_start_series-stage2_stimdur_series
+stage2_reaction_series = np.array([t.total_seconds() for t in stage2_reactions])
+
+
 correct_reactiontimes = trial_data[trial_data['Trial_Outcome'] == 1]
 viol_reactiontimes = trial_data[trial_data['Trial_Outcome'] == -1]
 # correct_rt_float = [t.total_seconds() for t in correct_reactiontimes]
 # viol_rt_float = [t.total_seconds() for t in viol_reactiontimes]
 pre_vs_reaction_ax.scatter(correct_reactiontimes['PreTone_Duration'],correct_reactiontimes['Reaction_Time'],
-            s=12, facecolors='none',edgecolors='b')
+            s=12, facecolors='none',edgecolors='lightsteelblue')
 pre_vs_reaction_ax.scatter(viol_reactiontimes['PreTone_Duration'],viol_reactiontimes['Reaction_Time'],
-            s=12, facecolors='none', edgecolors='r')
+            s=12, facecolors='none', edgecolors='lavender')
 pre_rt_mean = []
+pre_viol_rate = []
+# loop through unique embed times
 for pre in np.sort(trial_data['PreTone_Duration'].unique()):
-    pre_rt_mean.append([correct_reactiontimes[correct_reactiontimes['PreTone_Duration']==pre]['Reaction_Time'].mean(),
-                       viol_reactiontimes[viol_reactiontimes['PreTone_Duration']==pre]['Reaction_Time'].mean()])
-pre_vs_reaction_ax.plot(np.array(pre_rt_mean).transpose()[0,1:-1])
-pre_vs_reaction_ax.plot(np.array(pre_rt_mean).transpose()[1,1:-1])
+    pre_rt_mean.append([correct_reactiontimes[correct_reactiontimes['PreTone_Duration'] == pre]['Reaction_Time'].mean(),
+                       viol_reactiontimes[viol_reactiontimes['PreTone_Duration'] == pre]['Reaction_Time'].mean()])
+    pre_viol_rate.append(viol_reactiontimes[viol_reactiontimes['PreTone_Duration'] == pre].shape[0] /
+                         trial_data[trial_data['PreTone_Duration'] == pre].shape[0])
+
+pre_vs_viol_ax.plot(np.sort(trial_data['PreTone_Duration'].unique()),np.array(pre_viol_rate).transpose())
 
 pre_vs_reaction_ax.set_xlim([0.25,5.5])
 pre_vs_reaction_ax.set_xticks(trial_data['PreTone_Duration'].unique()[1:])
-pre_vs_reaction_ax.set_ylabel('Reaction Time relative to Stim Duration (s)')
 pre_vs_reaction_ax.set_xlabel('Tone Embedd time (s)')
-# gaptone amp
+pre_vs_reaction_ax.set_ylim((-6,4))
+pre_vs_reaction_ax.set_ylabel('Reaction Time relative to Stim Duration (s)')
+
+pre_vs_viol_ax.set_xlabel('Tone Embedd time (s)')
+pre_vs_viol_ax.set_ylabel('Violation Rate')
 
 for i, animal in enumerate(animals):
-    x_axis = np.full(len(reaction_times[i]),i)
-    reaction_seconds = np.array([t.total_seconds() for t in reaction_times[i]])
-    reaction_ax[0].scatter(x_axis, reaction_seconds,label=animal,s=20, facecolors='none',edgecolor=marker_colors[i])
-    reaction_ax[0].scatter(i,reaction_seconds.mean(),marker='x',color='k',s=50)
+    animal_pretone_df = trial_data.loc[animal]
+    animal_pretone_corr = animal_pretone_df[animal_pretone_df['Trial_Outcome'] == 1]
+    animal_pretone_viol = animal_pretone_df[animal_pretone_df['Trial_Outcome'] == -1]
+
+    pre_rt_mean = []
+    for pre in np.sort(animal_pretone_df['PreTone_Duration'].unique()):
+        pre_rt_mean.append(
+            [animal_pretone_corr[animal_pretone_corr['PreTone_Duration'] == pre]['Reaction_Time'].mean(),
+             animal_pretone_viol[animal_pretone_viol['PreTone_Duration'] == pre]['Reaction_Time'].mean(),pre])
+    pre_vs_reaction_ax.scatter(np.array(pre_rt_mean).transpose()[2],np.array(pre_rt_mean).transpose()[0],marker='x',s=75,color=marker_colors[i])
+    pre_vs_reaction_ax.scatter(np.array(pre_rt_mean).transpose()[2],np.array(pre_rt_mean).transpose()[1],marker='x',s=75,color=marker_colors[i])
+pre_vs_reaction_ax.plot(np.sort(trial_data['PreTone_Duration'].unique()[1:-1]),np.array(pre_rt_mean).transpose()[0,1:-1],color='k')
+pre_vs_reaction_ax.plot(np.sort(trial_data['PreTone_Duration'].unique()[1:-1]),np.array(pre_rt_mean).transpose()[1,1:-1],color='k')
+
+# plot gaptone amp vs viol rate
+gaptone_viol_fig, gaptone_viol_ax = plt.subplots()
+trial_data['zeroed_gap_amp'] = trial_data['GapTone_Amplitude']
+positive_amp_ix = trial_data['GapTone_Amplitude'] < 0
+over_amp_ix = trial_data['GapTone_Amplitude'] > 87
+trial_data.loc[positive_amp_ix,'zeroed_gap_amp'] = 0
+trial_data.loc[over_amp_ix,'zeroed_gap_amp'] = 87
+
+tone_amp_arr = []
+for i, amp in enumerate(np.sort(trial_data['zeroed_gap_amp'].unique())):
+    subset_amp = trial_data.loc[trial_data['zeroed_gap_amp'] == amp,'Trial_Outcome'] == -1
+    # subset_viols = subset_amp[subset_amp['Trial_Outcome'] == -1]
+    amp_viol_rate = subset_amp.sum()/subset_amp.shape[0]
+    tone_amp_arr.append([amp,amp_viol_rate])
+tone_amp_arr = np.array(tone_amp_arr)
+gaptone_viol_ax.scatter(tone_amp_arr[2:,0],tone_amp_arr[2:,1])
+gaptone_viol_ax.set_xlim((55,90))
+gaptone_viol_ax.set_xticks(np.arange(60,95,5))
+gaptone_viol_ax.set_xlabel('Embedded Tone Amplitude (db)')
+gaptone_viol_ax.set_ylabel('Violation Rate')
 
 
-reaction_ax[0].set_xticks([])
-reaction_ax[0].legend(loc=9,ncol=len(animals))
-reaction_ax[0].set_ylabel('Reaction Time (seconds)')
-reaction_ax[0].axhline(0.5,linestyle='--',color='grey',linewidth=0.5)
+# gotone vs reaction time
+gotone_reactions = []
+trial_data['zeroed_go_amp'] = trial_data['GoTone_Amplitude']
+neagtive_amp_ix = trial_data['GoTone_Amplitude'] < 0
+over_amp_ix = trial_data['GoTone_Amplitude'] > 87
+trial_data.loc[neagtive_amp_ix,'zeroed_go_amp'] = 0
+trial_data.loc[over_amp_ix,'zeroed_go_amp'] = 87
+trial_data['stage2_reaction'] = stage2_reaction_series
 
-total_valvetime = animal_correct_trials['ValveTime'].sum()
-print(total_valvetime*.112)
+gotone_viol_fig, gotone_viol_ax = plt.subplots()
+for i, amp in enumerate(np.sort(trial_data['zeroed_go_amp'].unique())):
+    subset_amp_df = trial_data.loc[trial_data['zeroed_go_amp'] == amp]
+    subset_outcome_df = subset_amp_df.loc[subset_amp_df['Trial_Outcome'] == 1]
+    gotone_viol_ax.scatter(np.full_like(subset_outcome_df['stage2_reaction'],amp),subset_outcome_df['stage2_reaction'],
+                           facecolors='none',edgecolor='lightsteelblue')
+    gotone_reaction_mean = subset_outcome_df['stage2_reaction'].mean()
+    gotone_reactions.append([amp,gotone_reaction_mean])
+
+gotone_reactions = np.array(gotone_reactions)
+gotone_viol_ax.scatter(gotone_reactions[2:,0],gotone_reactions[2:,1],marker='x',color='k')
+gotone_viol_ax.set_xlim((85,40))
+gotone_viol_ax.set_xticks(np.arange(0,95,5))
+gotone_viol_ax.set_xlabel('Go Tone Amplitude (db)')
+gotone_viol_ax.set_ylabel('Reaction Time (s)')
+gotone_viol_ax.set_title('Stage 2 reaction times vs Go Tone Amplitude')
+
+
+
+# total_valvetime = animal_correct_trials['ValveTime'].sum()
+# print(total_valvetime*.112)
 
 # def cal_step_mean(start,step,iters,thresh):
 #     amount = start
