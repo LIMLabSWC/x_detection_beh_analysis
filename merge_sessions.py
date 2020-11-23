@@ -1,11 +1,11 @@
 import pandas as pd
 import numpy as np
 import os
-from copy import copy as copy
+from copy import copy
 import time
 from datetime import datetime, timedelta
 from matplotlib import pyplot as plt
-
+import plot_sessions
 
 def merge_sessions(datadir,animal_list,filestr_cond, datestr_format='%yy%mm%dd'):
     """
@@ -97,12 +97,12 @@ animals = [
             #'DO12',
             #'DO13',
             #'DO14',
-            # 'DO15',
+            'DO15',
             # 'DO16',
-            # 'DO17',
+            'DO17',
             #'DO18',
             'DO19',
-            # 'DO20',
+            'DO20',
             # 'DO23',
             # 'DO24',
             # 'DO25',
@@ -110,7 +110,7 @@ animals = [
 ]
 
 datadir = r'C:\bonsai\data\Dammy'
-date_range =['20/11/2020', '20/11/2020']
+date_range =['02/11/2020', '20/11/2020']
 
 
 # params = merge_sessions(datadir,animals,'params')
@@ -154,7 +154,7 @@ perfomance_ax.set_xticks(range(2,7))
 perfomance_ax.legend()
 perfomance_ax.set_title(f'Peformance for all trials {date_range[0]} to {date_range[1]}')
 
-reaction_plot, reaction_ax = plt.subplots()
+reaction_plot, reaction_ax = plt.subplots(2)
 reaction_times = []
 
 for animal in animals:
@@ -162,20 +162,61 @@ for animal in animals:
     animal_correct_trials = animal_df[animal_df['Trial_Outcome'] == 1]
     trial_start_series = np.array([datetime.strptime(trial_start[:-1],'%H:%M:%S.%f') for trial_start in animal_correct_trials['Trial_Start']])
     trial_end_series = np.array([datetime.strptime(trial_end[:-1],'%H:%M:%S.%f') for trial_end in animal_correct_trials['Trial_End']])
-    stimdur_series = np.array([timedelta(seconds=t) for t in animal_correct_trials['Stim1_Duration']])
+    stimdur_series = np.array([timedelta(seconds=pre+post+0.9) for pre, post in
+                               zip(animal_correct_trials['PreTone_Duration'],animal_correct_trials['PostTone_Duration'])])  # use sum of pre/post/tone durs
     reaction_series = trial_end_series-trial_start_series-stimdur_series
+    animal_correct_trials['Reaction_Time'] = copy(reaction_series)
     reaction_times.append(reaction_series)
 
 for i, animal in enumerate(animals):
     x_axis = np.full(len(reaction_times[i]),i)
     reaction_seconds = np.array([t.total_seconds() for t in reaction_times[i]])
-    reaction_ax.scatter(x_axis, reaction_seconds,label=animal,s=20, facecolors='none',edgecolor=marker_colors[i])
-    reaction_ax.scatter(i,reaction_seconds.mean(),marker='x',color='k',s=50)
+    reaction_ax[0].scatter(x_axis, reaction_seconds,label=animal,s=20, facecolors='none',edgecolor=marker_colors[i])
+    reaction_ax[0].scatter(i,reaction_seconds.mean(),marker='x',color='k',s=50)
 
-reaction_ax.set_xticks([])
-reaction_ax.legend(loc=9,ncol=len(animals))
-reaction_ax.set_ylabel('Reaction Time (seconds)')
-reaction_ax.axhline(0.5,linestyle='--',color='grey',linewidth=0.5)
+# plot pretone dur vs reaction time, violation rate
+pre_vs_reaction_fig, pre_vs_reaction_ax = plt.subplots()
+# get reaction time for full trial data df
+trial_start_series = np.array([datetime.strptime(trial_start[:-1],'%H:%M:%S.%f') for trial_start in trial_data['Trial_Start']])
+trial_end_series = np.array([datetime.strptime(trial_end[:-1],'%H:%M:%S.%f') for trial_end in trial_data['Trial_End']])
+stimdur_series = np.array([timedelta(seconds=pre+post+0.9) for pre, post in
+                           zip(trial_data['PreTone_Duration'],trial_data['PostTone_Duration'])])  # use sum of pre/post/tone durs
+reaction_series = trial_end_series-trial_start_series-stimdur_series
+rt_float = [t.total_seconds() for t in reaction_series]
+trial_data['Reaction_Time'] = copy(rt_float)
+
+correct_reactiontimes = trial_data[trial_data['Trial_Outcome'] == 1]
+viol_reactiontimes = trial_data[trial_data['Trial_Outcome'] == -1]
+# correct_rt_float = [t.total_seconds() for t in correct_reactiontimes]
+# viol_rt_float = [t.total_seconds() for t in viol_reactiontimes]
+pre_vs_reaction_ax.scatter(correct_reactiontimes['PreTone_Duration'],correct_reactiontimes['Reaction_Time'],
+            s=12, facecolors='none',edgecolors='b')
+pre_vs_reaction_ax.scatter(viol_reactiontimes['PreTone_Duration'],viol_reactiontimes['Reaction_Time'],
+            s=12, facecolors='none', edgecolors='r')
+pre_rt_mean = []
+for pre in np.sort(trial_data['PreTone_Duration'].unique()):
+    pre_rt_mean.append([correct_reactiontimes[correct_reactiontimes['PreTone_Duration']==pre]['Reaction_Time'].mean(),
+                       viol_reactiontimes[viol_reactiontimes['PreTone_Duration']==pre]['Reaction_Time'].mean()])
+pre_vs_reaction_ax.plot(np.array(pre_rt_mean).transpose()[0,1:-1])
+pre_vs_reaction_ax.plot(np.array(pre_rt_mean).transpose()[1,1:-1])
+
+pre_vs_reaction_ax.set_xlim([0.25,5.5])
+pre_vs_reaction_ax.set_xticks(trial_data['PreTone_Duration'].unique()[1:])
+pre_vs_reaction_ax.set_ylabel('Reaction Time relative to Stim Duration (s)')
+pre_vs_reaction_ax.set_xlabel('Tone Embedd time (s)')
+# gaptone amp
+
+for i, animal in enumerate(animals):
+    x_axis = np.full(len(reaction_times[i]),i)
+    reaction_seconds = np.array([t.total_seconds() for t in reaction_times[i]])
+    reaction_ax[0].scatter(x_axis, reaction_seconds,label=animal,s=20, facecolors='none',edgecolor=marker_colors[i])
+    reaction_ax[0].scatter(i,reaction_seconds.mean(),marker='x',color='k',s=50)
+
+
+reaction_ax[0].set_xticks([])
+reaction_ax[0].legend(loc=9,ncol=len(animals))
+reaction_ax[0].set_ylabel('Reaction Time (seconds)')
+reaction_ax[0].axhline(0.5,linestyle='--',color='grey',linewidth=0.5)
 
 total_valvetime = animal_correct_trials['ValveTime'].sum()
 print(total_valvetime*.112)
@@ -188,3 +229,7 @@ print(total_valvetime*.112)
 #         if i%thresh ==0 and i>0:
 #             amount+=step
 #     return tally, tally/iters
+
+# session_dfs = plot_sessions.subset_dates(trial_data)
+# plot_sessions.plt_sess_features(session_dfs,['Trial_Outcome'])
+# plot_sessions.plot_featuresvsdate(session_dfs,[['Time','total'],['Valve_Time','mean']],animals)
