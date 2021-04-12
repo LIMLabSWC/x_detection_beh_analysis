@@ -7,14 +7,14 @@ from datetime import datetime, timedelta
 from matplotlib import pyplot as plt
 import plot_sessions
 
-def merge_sessions(datadir,animal_list,filestr_cond, datestr_format='%yy%mm%dd'):
+def merge_sessions(datadir,animal_list,filestr_cond, datestr_format='%y%m%d'):
     """
     Function to merge csv files for given conditon
-    :param datadir:
-    :param animal_list:
-    :param filestr_cond:
-    :param datestr_format:
-    :return:
+    :param datadir: str. starting point for datafiles
+    :param animal_list: list (str) of animals to incluse
+    :param filestr_cond: str specifying data filetype. Trial/SummaryData
+    :param datestr_format: list len 2. start and end date in %d/%m/%Y format
+    :return: concatenated df for aniimal_animal list over date range
     """
 
     file_df = []
@@ -22,8 +22,11 @@ def merge_sessions(datadir,animal_list,filestr_cond, datestr_format='%yy%mm%dd')
         if filestr_cond == 'SummaryData' or filestr_cond == 'params':
             for file in files:
                 if file.find(filestr_cond) != -1:
+                    session_date = file[-11:-5]
                     loaded_file = pd.read_csv(os.path.join(root,file), delimiter=',')
-                    if loaded_file['Name'][0] in animal_list:
+                    if loaded_file['Name'][0] in animal_list \
+                            and datetime.strptime(date_range[0], '%d/%m/%Y') <= datetime.strptime(session_date,datestr_format)\
+                            <= datetime.strptime(date_range[1], '%d/%m/%Y'):
                         loaded_file.set_index(['Name','Date']).sort_index()
                         file_df.append(copy(loaded_file))
 
@@ -33,7 +36,7 @@ def merge_sessions(datadir,animal_list,filestr_cond, datestr_format='%yy%mm%dd')
                     animal_name = file[0:4]
                     session_date = file[-11:-5]
                     if animal_name in animal_list \
-                            and datetime.strptime(date_range[0], '%d/%m/%Y') <= datetime.strptime(session_date,'%y%m%d')\
+                            and datetime.strptime(date_range[0], '%d/%m/%Y') <= datetime.strptime(session_date,datestr_format)\
                             <= datetime.strptime(date_range[1], '%d/%m/%Y'):
                         try:
                             loaded_file = pd.read_csv(os.path.join(root,file), delimiter=',')
@@ -52,8 +55,6 @@ def merge_sessions(datadir,animal_list,filestr_cond, datestr_format='%yy%mm%dd')
             return None
 
     return file_df
-
-
 
 
 # def create_subset_df(data_dict, fields, date_period=('01/01/1000','now'), rats=None):
@@ -90,24 +91,53 @@ def merge_sessions(datadir,animal_list,filestr_cond, datestr_format='%yy%mm%dd')
 #     t1 = time.time()
 #     # print('Time taken ',t1-t0)
 #     return df
+def get_fractioncorrect(data_df, stimlen_range,animal_list):
 
+    performance = []
+    ntrial_list = []
+    for animal in animal_list:
+        stim_perfomance = []
+        animal_df = data_df.loc[animal]
+        ntrial_list.append(animal_df.shape[0])
+        for stim in range(stimlen_range):
+            stim_df = animal_df[animal_df['Stim1_Duration'] == stim]['Trial_Outcome']
+            stim_correct = stim_df == 1
+            stim_perfomance.append(stim_correct.mean())
+        performance.append(stim_perfomance)
+    return performance, ntrial_list
+
+
+def filter_df(data_df, filters, fildict):
+    df2filter = data_df
+    for fil in filters:
+        column = fildict[fil][0]
+        cond = fildict[fil][1]
+        if len(fildict[fil]) == 2:
+            _df = copy(df2filter[df2filter[column] == cond])
+        elif len(fildict[fil]) == 3:
+            if fildict[fil][2] == '>':
+                _df = copy(df2filter[df2filter[column] > cond])
+            elif fildict[fil][2] == '<':
+                _df = copy(df2filter[df2filter[column] < cond])
+            elif fildict[fil][2] == '!=':
+                _df = copy(df2filter[df2filter[column] != cond])
+            else:
+                print('incorrect format used, filter skipped')
+                _df = df2filter
+        else:
+            print('Incorrect filter config used. Filter skipped')
+            _df = df2filter
+        df2filter = _df
 
 
 animals = [
-            #'DO12',
-            #'DO13',
-            #'DO14',
-            'DO15',
-            # 'DO16',
-            'DO17',
-            #'DO18',
-            'DO19',
-            'DO20',
-            # 'DO23',
-            # 'DO24',
-            # 'DO25',
-            # 'DO26'
+            # 'DO27',
+            # 'DO28',
+            # 'DO29',
 ]
+
+
+
 
 datadir = r'C:\bonsai\data\Dammy'
 date_range =['26/10/2020', '20/11/2020']
@@ -125,34 +155,20 @@ marker_colors = ['b','r','c','m','y','g']
 
 trial_data = merge_sessions(datadir,animals,'TrialData')
 trial_data = pd.concat(trial_data, sort=False, axis=0)
-# do17_stage2 = pd.concat([trial_data.loc['DO17','201012'],trial_data.loc['DO17','201013']])
-# do17_stage2_viols = do17_stage2['Trial_Outcome'] == -1
-# do17_stage2_cum_mean = do17_stage2_viols.expanding().mean()
-# plt.plot(do17_stage2_cum_mean.values)
 
-performance = []
-ntrial_list = []
-for animal in animals:
-    stim_perfomance = []
-    animal_df = trial_data.loc[animal]
-    ntrial_list.append(animal_df.shape[0])
-    for stim in range(2,7):
-        stim_df = animal_df[animal_df['Stim1_Duration'] == stim]['Trial_Outcome']
-        stim_correct = stim_df == 1
-        stim_perfomance.append(stim_correct.mean())
-    performance.append(stim_perfomance)
+fractioncorrect = get_fractioncorrect(trial_data, [2,7], trial_data.keys().unique()[0])
 
+def plot_performance(animal_list,stimlen_range):
+    perfomance_plot, perfomance_ax = plt.subplots(1, 1)
 
-
-perfomance_plot, perfomance_ax = plt.subplots(1,1)
-for i, animal in enumerate(animals):
-    perfomance_ax.plot(np.arange(2,7),performance[i],label=f'{animal},{ntrial_list[i]} Trials',color=marker_colors[i])
-perfomance_ax.set_ylim((0,1))
-perfomance_ax.set_ylabel('Fraction Correct')
-perfomance_ax.set_xlabel('Stimulus Duration')
-perfomance_ax.set_xticks(range(2,7))
-perfomance_ax.legend()
-perfomance_ax.set_title(f'Peformance for all trials {date_range[0]} to {date_range[1]}')
+    for i, animal in enumerate(animal_list):
+        perfomance_ax.plot(np.arange(2,7),fractioncorrect[0][i],label=f'{animal},{fractioncorrect[1][i]} Trials',color=marker_colors[i])
+    perfomance_ax.set_ylim((0,1))
+    perfomance_ax.set_ylabel('Fraction Correct')
+    perfomance_ax.set_xlabel('Stimulus Duration')
+    perfomance_ax.set_xticks(range(stimlen_range))
+    perfomance_ax.legend()
+    perfomance_ax.set_title(f'Peformance for all trials {date_range[0]} to {date_range[1]}')
 
 reaction_plot, reaction_ax = plt.subplots()
 reaction_times = []
