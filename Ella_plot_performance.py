@@ -138,10 +138,16 @@ animals = [
 ]
 
 
-
-
 datadir = r'C:\Users\Ella Svahn\Git\data\Ella'
-date_range =['09/09/2021', '10/09/2021']
+date_range =['09/09/2021',
+             '10/09/2021',
+             '13/09/2021',
+             '14/09/2021',
+             '15/09/2021',
+             '16/09/2021',
+             '17/09/2021',
+             '22/09/2021',
+             '23/09/2021']
 
 
 # params = merge_sessions(datadir,animals,'params')
@@ -193,7 +199,7 @@ for animal in animals:
 
 # plot pretone dur vs reaction time, violation rate
 pre_vs_reaction_fig, pre_vs_reaction_ax = plt.subplots()
-pre_vs_viol_fig, pre_vs_viol_ax = plt.subplots()
+ pre_vs_viol_fig, pre_vs_viol_ax = plt.subplots()
 # get reaction time for full trial data df
 trial_start_series = np.array([datetime.strptime(trial_start[:-1],'%H:%M:%S.%f') for trial_start in trial_data['Trial_Start']])
 trial_end_series = np.array([datetime.strptime(trial_end[:-1],'%H:%M:%S.%f') for trial_end in trial_data['Trial_End']])
