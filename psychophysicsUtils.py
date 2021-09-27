@@ -8,14 +8,16 @@ import os
 from tqdm.notebook import tqdm
 import pickle
 from scipy import fftpack
-from datetime import datetime  
+from datetime import datetime,timedelta,time
 import matplotlib.pyplot as plt
 import matplotlib.pyplot as plt 
 import matplotlib 
 from matplotlib import cm
 from matplotlib import rcParams
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from cycler import cycler 
+from cycler import cycler
+import pandas as pd
+
 plt.style.use("seaborn")
 rcParams['figure.dpi']= 300
 rcParams['axes.labelsize']=5
@@ -78,7 +80,11 @@ Returns:
 • dt: the average time step for this array 
 """
 def get_dt(timeArray):
-	return np.mean((np.roll(timeArray,-1) - timeArray)[1:-1])
+	if isinstance(timeArray,np.ndarray):
+		return np.mean((np.roll(timeArray,-1) - timeArray)[1:-1])
+	elif isinstance(timeArray,pd.Series):
+		return timeArray.diff().mean().total_seconds()
+
 
 
 
@@ -248,7 +254,7 @@ Basically, PupilLabs doesn't have a constant FPS which messes with later filteri
 """
 def uniformSample(dataArray, timeArray, new_dt = None, aligntimes = None, verbose = True): 
 	dt = get_dt(timeArray)
-	
+
 	if verbose == True:
 		if aligntimes is None: 
 			print("Uniformly sampling  data to %gHz (current frequency ~%gHz)" %(int(1/new_dt),int(1/dt)))
@@ -265,7 +271,10 @@ def uniformSample(dataArray, timeArray, new_dt = None, aligntimes = None, verbos
 		while True:
 			newTimeArray.append(t)
 			newDataArray.append(datum)
-			t += new_dt
+			if isinstance(t, pd._libs.tslibs.timestamps.Timestamp):
+				t += timedelta(new_dt)
+			else:
+				t += new_dt
 			if t > timeArray[-1]:
 				break
 			else: #interpolate 
@@ -503,17 +512,18 @@ Returns:
 """
 def frequencyFilter(dataArray,timeArray,cutoff_freq,cutoff_width,highpass=False,plotStuff=False,mousecam=False):
 
-	if mousecam:
-		dt = timeArray.diff().mean().total_seconds()
-	else:
-		dt = get_dt(timeArray)
-	
+	# if mousecam:
+	# 	dt = timeArray.diff().mean().total_seconds()
+	# else:
+	# 	dt = get_dt(timeArray)
+
+	dt = get_dt(timeArray)
 	if highpass == True: name=('Highpass','below')
 	else: name = ('Lowpass','above')
 
 	print("%s filtering out frequencies %s %.2f +- %.2fHz" %(name[0], name[1], cutoff_freq, cutoff_width))
 	#derive the filter
-	f = fftpack.fftfreq(dataArray.size,dt)
+	f = fftpack.fftfreq(dataArray.size, dt)
 	fil = 1/(1 + np.exp(-(4/cutoff_width)*(np.abs(f) - cutoff_freq))) #logistic curve (abs for positive and negative frequencies)
 	if highpass == False: fil = 1 - fil 
 	plt.figure(0)
@@ -667,8 +677,8 @@ class pupilDataClass():
 	def loadData(self, defaultMachine='EL',eye='right'):
 		self.rawPupilDiams, self.rawTimes = loadAndSyncPupilData(self.name, defaultMachine=defaultMachine,eye=eye)
 
-	def uniformSample(self):
-		self.pupilDiams, self.times = uniformSample(self.rawPupilDiams, self.rawTimes, new_dt = 0.5*get_dt(self.rawTimes))
+	def uniformSample(self,new_rate):
+		self.pupilDiams, self.times = uniformSample(self.rawPupilDiams, self.rawTimes, new_dt =new_rate)
 
 	def removeOutliers(self,n_speed=2.5,n_size=2.5):
 		self.pupilDiams, self.isOutlier = removeOutliers(self.pupilDiams,self.times,n_speed=n_speed,n_size=n_size)
@@ -893,7 +903,7 @@ Returns:
 	• array with apupilDiams for all statifying trials shape (n_valid_trials,len_pupil_range)
 	• a time array of the same size, shape (len_pupil_range) starting at tstart and ending at tend for plotting against 
 """
-def sliceAndAlign(data, alignEvent = 'toneStart', conditionsList=[], tstart = -2, tend = 5, dt = 0.02): 
+def sliceAndAlign(data, alignEvent = 'toneStart', conditionsList=[], tstart = -2, tend = 5, dt = 0.02):
 
 	trials, pupilDiams, isOutlier, times = data.trialData, data.pupilDiams, data.isOutlier, data.times
 
@@ -902,112 +912,125 @@ def sliceAndAlign(data, alignEvent = 'toneStart', conditionsList=[], tstart = -2
 	varianceExclusion = 0
 	noPupilDataExclusion = 0
 	validTrials = 0
-	for i in np.arange(len(trials)):
 
-		verdict = True
+	if isinstance(data,pd.DataFrame):
+		return('not applicable for pandas')
+		# n_timestep = int((tend - tstart) / dt)
+		# alignedTime = np.linspace(tstart, tend, n_timestep)
+		# alignedPupilDiams_desiredTimeArray = np.linspace(times[startidx], times[endidx], n_timestep)
+		# alignedPupilDiams = \
+		# uniformSample(pupilDiams, times, aligntimes=alignedPupilDiams_desiredTimeArray, verbose=False)[0]
+		# if alignedData is None:
+		# 	alignedData = np.array([np.array(alignedPupilDiams)])
+		# else:
+		# 	alignedData = np.vstack([alignedData, np.array(alignedPupilDiams)])
+	else:
+		for i in np.arange(len(trials)):
 
-		tevent = trials[i][alignEvent]
-		if type(tevent) is str:
-			continue
+			verdict = True
 
-		else: 
-			startidx = np.argmin(np.abs(times - (tevent+tstart)))
-			endidx = np.argmin(np.abs(times - (tevent+tend)))
-
-		if 0 in conditionsList: #activate if you ONLY want the first 20 trials
-			if i >= 20:
-				verdict *= False
-
-		if 1 in conditionsList: #activate if you want to EXCLUDE the first 20 trials
-			if i < 20:
-				verdict *= False
-
-		if 2 in conditionsList: #activate if you want to EXCLUDE the first 50 trials
-			if i < 50:
-				verdict *= False
-
-		if 3 in conditionsList: #activate if you want only correct trials only 
-			if trials[i]['trialCorrect'] != 'correct':
-				verdict *= False
-
-		if 4 in conditionsList: #activate if you want normal (non-violation) patterns only
-			if trials[i]['patternType'] != 0:
-				verdict *= False
-
-		if 5 in conditionsList: #activate if you want violation patterns only trials only 
-			if trials[i]['patternType'] == 0:
-				verdict *= False
-
-		if 6 in conditionsList: #look at only patterns of type 1 ABC_
-			if trials[i]['patternType'] != 1:
-				verdict *= False
-
-		if 7 in conditionsList: #look at only patterns of type 1 AB_D
-			if trials[i]['patternType'] != 2:
-				verdict *= False
-
-		if 8 in conditionsList: #look at only patterns of type 1 AB__
-			if trials[i]['patternType'] != 3:
-				verdict *= False
-
-		if 9 in conditionsList: #only trials where tone had a decreasing note e.g. ABDC
-			tones = ['A','B','C','D']
-			trialTones = trials[i]['tonesList']
-			if ((tones.index(trialTones[1]) >= tones.index(trialTones[0])) and 
-				(tones.index(trialTones[2]) >= tones.index(trialTones[1])) and
-				(tones.index(trialTones[3]) >= tones.index(trialTones[2]))): 
-				verdict *= False
-
-		if 10 in conditionsList: #activate if you want only trials when the tone was heard 
-			if trials[i]['toneHeard'] == False:
-				verdict *= False
-
-		if 12 in conditionsList: #only trials when tone was BEFORE gap
-			if trials[i]['toneAfterGap'] == True:
-				verdict *= False 
-
-		if 14 in conditionsList: #only trials where tone didn't have a decreasing note e.g. ABDD
-			tones = ['A','B','C','D']
-			trialTones = trials[i]['tonesList']
-			if not ((tones.index(trialTones[1]) >= tones.index(trialTones[0])) and 
-				(tones.index(trialTones[2]) >= tones.index(trialTones[1])) and
-				(tones.index(trialTones[3]) >= tones.index(trialTones[2]))): 
-				verdict *= False
-
-		#Now exclude for non-experimental reasons (e.g. due to high interpolation or variance)
-		verdict_ = verdict
-		if verdict_ == True: 
-			validTrials += 1
-
-			if ((len(pupilDiams[startidx:endidx]) != endidx-startidx) or 
-				(abs((times[endidx] - times[startidx]) - (tend - tstart)) > 0.1)):
-				if verdict_ == True:
-					noPupilDataExclusion += 1
-				verdict *= False
+			tevent = trials[i][alignEvent]
+			if type(tevent) is str:
+				continue
 
 			else:
-				if 11 in conditionsList: #activate if you want to EXCLUDE trials where the pupil diameter goes over 4 std:
-					if np.max(np.abs(pupilDiams[startidx:endidx])) > 4:
-						if verdict_ == True: 
-							varianceExclusion += 1 
-						verdict *= False
+				startidx = np.argmin(np.abs(times - (tevent+tstart)))
+				endidx = np.argmin(np.abs(times - (tevent+tend)))
 
-				if 13 in conditionsList: #exclude trials where over 20% of the pupil data is outliers
-					if np.mean((isOutlier[startidx:endidx]))/(endidx-startidx) >= 0.2:
-						if verdict_ == True:
-							interpolationExclusion += 1 
-						verdict *= False
+			if 0 in conditionsList: #activate if you ONLY want the first 20 trials
+				if i >= 20:
+					verdict *= False
+
+			if 1 in conditionsList: #activate if you want to EXCLUDE the first 20 trials
+				if i < 20:
+					verdict *= False
+
+			if 2 in conditionsList: #activate if you want to EXCLUDE the first 50 trials
+				if i < 50:
+					verdict *= False
+
+			if 3 in conditionsList: #activate if you want only correct trials only
+				if trials[i]['trialCorrect'] != 'correct':
+					verdict *= False
+
+			if 4 in conditionsList: #activate if you want normal (non-violation) patterns only
+				if trials[i]['patternType'] != 0:
+					verdict *= False
+
+			if 5 in conditionsList: #activate if you want violation patterns only trials only
+				if trials[i]['patternType'] == 0:
+					verdict *= False
+
+			if 6 in conditionsList: #look at only patterns of type 1 ABC_
+				if trials[i]['patternType'] != 1:
+					verdict *= False
+
+			if 7 in conditionsList: #look at only patterns of type 1 AB_D
+				if trials[i]['patternType'] != 2:
+					verdict *= False
+
+			if 8 in conditionsList: #look at only patterns of type 1 AB__
+				if trials[i]['patternType'] != 3:
+					verdict *= False
+
+			if 9 in conditionsList: #only trials where tone had a decreasing note e.g. ABDC
+				tones = ['A','B','C','D']
+				trialTones = trials[i]['tonesList']
+				if ((tones.index(trialTones[1]) >= tones.index(trialTones[0])) and
+					(tones.index(trialTones[2]) >= tones.index(trialTones[1])) and
+					(tones.index(trialTones[3]) >= tones.index(trialTones[2]))):
+					verdict *= False
+
+			if 10 in conditionsList: #activate if you want only trials when the tone was heard
+				if trials[i]['toneHeard'] == False:
+					verdict *= False
+
+			if 12 in conditionsList: #only trials when tone was BEFORE gap
+				if trials[i]['toneAfterGap'] == True:
+					verdict *= False
+
+			if 14 in conditionsList: #only trials where tone didn't have a decreasing note e.g. ABDD
+				tones = ['A','B','C','D']
+				trialTones = trials[i]['tonesList']
+				if not ((tones.index(trialTones[1]) >= tones.index(trialTones[0])) and
+					(tones.index(trialTones[2]) >= tones.index(trialTones[1])) and
+					(tones.index(trialTones[3]) >= tones.index(trialTones[2]))):
+					verdict *= False
+
+			#Now exclude for non-experimental reasons (e.g. due to high interpolation or variance)
+			verdict_ = verdict
+			if verdict_ == True:
+				validTrials += 1
+
+				if ((len(pupilDiams[startidx:endidx]) != endidx-startidx) or
+					(abs((times[endidx] - times[startidx]) - (tend - tstart)) > 0.1)):
+					if verdict_ == True:
+						noPupilDataExclusion += 1
+					verdict *= False
+
+				else:
+					if 11 in conditionsList: #activate if you want to EXCLUDE trials where the pupil diameter goes over 4 std:
+						if np.max(np.abs(pupilDiams[startidx:endidx])) > 4:
+							if verdict_ == True:
+								varianceExclusion += 1
+							verdict *= False
+
+					if 13 in conditionsList: #exclude trials where over 20% of the pupil data is outliers
+						if np.mean((isOutlier[startidx:endidx]))/(endidx-startidx) >= 0.2:
+							if verdict_ == True:
+								interpolationExclusion += 1
+							verdict *= False
 
 
-		if verdict==True:
-			n_timestep = int((tend - tstart)/dt)
-			alignedTime = np.linspace(tstart,tend,n_timestep)
-			alignedPupilDiams_desiredTimeArray = np.linspace(times[startidx],times[endidx],n_timestep)
-			alignedPupilDiams = uniformSample(pupilDiams,times,aligntimes=alignedPupilDiams_desiredTimeArray,verbose=False)[0]
-			if alignedData is None: 
-				alignedData = np.array([np.array(alignedPupilDiams)])
-			else:
-				alignedData = np.vstack([alignedData,np.array(alignedPupilDiams)])
+			if verdict==True:
+				n_timestep = int((tend - tstart)/dt)
+				alignedTime = np.linspace(tstart,tend,n_timestep)
+				alignedPupilDiams_desiredTimeArray = np.linspace(times[startidx],times[endidx],n_timestep)
+				alignedPupilDiams = uniformSample(pupilDiams,times,aligntimes=alignedPupilDiams_desiredTimeArray,verbose=False)[0]
+				if alignedData is None:
+					alignedData = np.array([np.array(alignedPupilDiams)])
+				else:
+					alignedData = np.vstack([alignedData,np.array(alignedPupilDiams)])
 
 	print("%g valid trials of which %g remain after: \n      %g excluded due to interpolation \n      %g excluded due to high variance \n      %g excluded due to no pupildata in this time range" %(validTrials, len(alignedData),interpolationExclusion,varianceExclusion,noPupilDataExclusion))
 	return alignedData, alignedTime

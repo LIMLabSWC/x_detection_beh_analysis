@@ -133,14 +133,14 @@ def filter_df(data_df, filters, fildict):
 animals = [
             # 'DO27',
             # 'DO28',
-            # 'DO29',
+            'DO39',
 ]
 
 
 
 
 datadir = r'C:\bonsai\data\Dammy'
-date_range =['26/10/2020', '20/11/2020']
+date_range =['24/09/2021', '24/09/2021']
 
 
 # params = merge_sessions(datadir,animals,'params')
@@ -315,17 +315,9 @@ gotone_viol_ax.set_title('Stage 2 reaction times vs Go Tone Amplitude')
 
 
 
-# total_valvetime = animal_correct_trials['ValveTime'].sum()
+total_valvetime = animal_correct_trials['Reward_Amount'].sum()
 # print(total_valvetime*.112)
 
-# def cal_step_mean(start,step,iters,thresh):
-#     amount = start
-#     tally = 0
-#     for i in range(iters):
-#         tally+=amount
-#         if i%thresh ==0 and i>0:
-#             amount+=step
-#     return tally, tally/iters
 
 # session_dfs = plot_sessions.subset_dates(trial_data)
 # plot_sessions.plt_sess_features(session_dfs,['Trial_Outcome'])

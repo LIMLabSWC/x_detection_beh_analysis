@@ -90,8 +90,11 @@ def filter_df(data_df, filters):
         'c0': ['Tone_Position', 0],
         'c1': ['Tone_Position', 1],
         'd0': ['Pattern_Type', 0],
-        'd1': ['Pattern_Type', 0, '!='],
-
+        'd!0': ['Pattern_Type', 0, '!='],
+        'd1': ['Pattern_Type', 1],
+        'd2': ['Pattern_Type', 2],
+        'd3': ['Pattern_Type', 3],
+        'e!0': ['ToneTime_Scalar',0,'!=']
     }
 
     df2filter = data_df
@@ -242,3 +245,19 @@ def plot_frametimes(datfile):
     # frametime_ax[1] = plt.plot(toplot['frameNum'], toplot['rel_time'])
     # frametime_ax[1].set_ylim(toplot['rel_time'].max())
     return toplot
+
+
+def plotvar(data,plot,timeseries):
+    ci95 = 1*np.std(data,axis=0)/np.sqrt(data.shape[0])
+    print(ci95.shape)
+    plot[1].fill_between(timeseries, data.mean(axis=0)+ci95,data.mean(axis=0)-ci95,alpha=0.1)
+
+def add_datetimecol(df, colname, timefmt='%H:%M:%S.%f'):
+
+    datetime_arr = []
+    for t in df[colname]:
+        if len(t) > 8:
+            datetime_arr.append((datetime.strptime(t[:-1], timefmt)))
+        else:
+            datetime_arr.append((datetime.strptime(t,'%H:%M:%S')))
+    df[f'{colname}_dt'] = np.array(datetime_arr)
