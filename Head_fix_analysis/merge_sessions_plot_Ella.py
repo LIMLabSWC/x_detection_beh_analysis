@@ -128,7 +128,7 @@ animals = ['ES01',
 datadir = r'C:\Users\Ella Svahn\Git\data\Ella'
 date_range =[
              '13/09/2021',
-             '30/09/2021',
+             '29/09/2021',
              ]
 
 
@@ -136,16 +136,34 @@ trial_data = merge_sessions(datadir,animals,'TrialData')
 trial_data = pd.concat(trial_data, sort=False, axis=0)
 
 #%%
-trial_data['Correct'] = []
-trialList=[]
+trial_df = trial_data
+trial_list=[]
+for animal in animals:
+    animal_df = trial_df.loc[animal]
+    trial_list.append(animal_df.shape[0])
+    for trial in trial_list:
+        if trial_data[trial_data.Trial_Outcome==1][trial]:
+            animal_df['Correct'][trial]=1
+        elif trial_data[trial_data.Trial_Outcome==-1][trial]:
+            animal_df['Correct'][trial]=0    
+
+
+#%%
+correct= []
+violation=[]
+abort=[]
+trialList=[trial_df.shape[0]]
 for trial in range(len(trialList)):
     if trial_data[trial][trial_data.Trial_Outcome==1]:
-        trial_data['Correct'] = 1
+        correct.append(trial)
     elif trial_data[trial_data.Trial_Outcome==-1]:
-        trial_data['Correct'] = 0
+        violation.append(trial)    
     elif trial_data[trial_data.Trial_Outcome==0]:
-        trial_data['Correct'] = 0
-print(trial_data['Correct'])
+        abort.append(trial)
+        
+
+        
+
 #%% simple seaborn performance plot: performance per mouse per day, all stim lenths 
 # Stage 0
 
@@ -163,18 +181,21 @@ fig.axes.xaxis.set_ticklabels([])
 
 #%%
 # Stage 1
+#[trial_data.Stim1_Duration<0.5]
 fig = plt.subplot()
-sns.pointplot(data=trial_data.groupby(['Name','Date']).mean().reset_index(),x= 'Date',y='Trial_Outcome', hue = 'Name', palette = 'mako')
+sns.pointplot(data=trial_data[trial_data.Trial_Outcome !=0].groupby(['Name','Date']).mean().reset_index(),x= 'Date',y='Trial_Outcome', hue = 'Name', palette = 'mako')
 #plt.axhline(y=0.5, c='0.5', linestyle = '--')
 sns.despine()
 plt.ylabel('Fraction correct')
 plt.xlabel('Days')
-plt.ylim(0,1)
-#plt.xticks([1, 2, 3, 4,5,6,7,8,9,10,11,12,13,14])
-plt.title('Performance Stage 1')
+#plt.ylim(-0.1,1)
+#plt.yticks([1,0.7,0.4,0.1,-0.2,-0.5])
+plt.title('Performance Stage 1: long tone durations ')
 fig.axes.xaxis.set_ticklabels([])
+#fig.axes.yaxis.set_ticklabels([])
 
-#%%
+
+ #%%
 # Stage 1 performance vs stim1 dur
 fig = plt.subplot()
  
@@ -188,6 +209,21 @@ plt.xlim(0,2.1)
 #plt.xticks([1, 2, 3, 4,5,6,7,8,9,10,11,12,13,14])
 #plt.title('Stimulus duration increases throughout Stage 1')
 #fig.axes.xaxis.set_ticklabels([])
+
+#%%
+#decrease in reward attempts over time
+fig = plt.subplot()
+sns.pointplot(data=trial_data[trial_data.Trial_Outcome !=0].groupby(['Name','Date']).mean().reset_index(),x= 'Date',y='Reward_Attempts', hue = 'Name', palette = 'mako')
+#plt.axhline(y=0.5, c='0.5', linestyle = '--')
+sns.despine()
+plt.ylabel('Reward attempts')
+plt.xlabel('Days')
+#plt.ylim(-0.1,1)
+#plt.yticks([1,0.7,0.4,0.1,-0.2,-0.5])
+plt.title('Reward attempts')
+fig.axes.xaxis.set_ticklabels([])
+#fig.axes.yaxis.set_ticklabels([])
+
 
 #%% Final performance per side (L vs R) to show that antibias works 
 # mean across mice  
@@ -213,7 +249,7 @@ fig.axes.xaxis.set_ticklabels([])
 
 
 #%%
-#calculate performace for all stimuli lengths 
+#trial by Ella to calculate performace for all stimuli lengths 
 correct_trials = []
 performance = []
 stdev = []
@@ -228,9 +264,43 @@ for animal in animals:
     performance.append(stim_perfomance)
     stdev.append(stim_stdev)
 
+#%%
+def get_fractioncorrect(data_df, animal_list):
+    performance = []
+    ntrial_list = []
+    for animal in animals:
+        stim_perfomance = []
+        stim_stdev = []
+        animal_df = trial_data.loc[animal]
+        ntrial_list.append(animal_df.shape[0])
+        for stim in range(0,1):
+            stim_df = animal_df[animal_df['Stim1_Duration'] == stim]['Trial_Outcome']
+            stim_correct = stim_df == 1
+            stim_perfomance.append(stim_correct.mean())
+            stim_stdev.append(stim_correct.std())
+        performance.append(stim_perfomance)
+        stdev.append(stim_stdev)
+    
+'''   
+    performance = []
+    ntrial_list = []
+    for animal in animal_list:
+        stim_perfomance = []
+        animal_df = data_df.loc[animal]
+        ntrial_list.append(animal_df.shape[0])
+        for stim in range(stimlen_range):
+            stim_df = animal_df[animal_df['Stim1_Duration'] == stim]['Trial_Outcome']
+            stim_correct = stim_df == 1
+            stim_perfomance.append(stim_correct.mean())
+        performance.append(stim_perfomance)
+    return performance, ntrial_list
+'''
+fractioncorrect = get_fractioncorrect(trial_data, trial_data.keys().unique()[0])
 
 
 #%%
+marker_colors = ['b','r','c','m','y','g']
+
 perfomance_plot, perfomance_ax = plt.subplots(1,1)
 for i, animal in enumerate(animals):
     perf = np.array(performance[i])
