@@ -17,7 +17,7 @@ animals = [
 ]
 
 datadir = r'C:\bonsai\data\Dammy'
-dates = ['07/04/2021', 'now']
+dates = ['07/04/2021', '30/04/2021']
 plot_colours = ['b','r','c','m','y','g']
 
 trial_data = utils.merge_sessions(datadir,animals,'TrialData',dates)
@@ -41,19 +41,26 @@ for animal in animals:
             error_rate = 1
         stats_day = pd.DataFrame([[trials_done_day,early_rate,error_rate]],columns=cols)
         stats_dict[animal][date] = stats_day
-fig,ax = plt.subplots(3)
+fig,ax = plt.subplots(3,sharex=True)
 for i, animal in enumerate(animals):
     for id, d in enumerate(stats_dict[animal].keys()):
         for f, feature in enumerate(stats_dict[animal][d]):
             ax[f].scatter(id, stats_dict[animal][d][feature], color=plot_colours[i],label=animal)
             if i == 0:
                 ax[f].set_ylabel(f'{feature}')
-                ax[f].set_xlabel('Session Number')
+                # ax[f].set_xlabel('Session Number')
 
 handles, labels = fig.gca().get_legend_handles_labels()
 for axis in ax:
     by_label = OrderedDict(zip(labels, handles))
-    axis.legend(by_label.values(), by_label.keys())
+    # axis.legend(by_label.values(), by_label.keys())
+fig.legend(by_label.values(), by_label.keys())
+dates_unique = []
+for animal in animals:
+    dates_unique.extend(stats_dict[animal].keys())
+dates_unique = pd.Series(dates_unique).unique()
+ax[-1].set_xticks(np.arange(len(dates_unique)))
+ax[-1].set_xticklabels(list(dates_unique),rotation=40,ha='center',size=9)
 
 plots = utils.plot_performance(trial_data, np.arange(2,5.5,.5), animals, dates, plot_colours)
 plot_early = utils.plot_metric_v_stimdur(trial_data,np.arange(2,5.5,.5),'Trial_Outcome',-1,animals,dates,
@@ -82,6 +89,9 @@ for i, animal in enumerate(animals):
 endvsstimdur_fig.legend()
 endvsstimdur_ax.set_xlabel('Trial end relative to Stimulus duration')
 endvsstimdur_ax.axvline(1,color='k',linestyle='--')
+
+
+
 
 # plot early rate vs trial number
 
@@ -112,3 +122,6 @@ correcttrialnum_fig,correcttrialnum_ax,correcttrialnum_xy = utils.plot_metricrat
 #             data = utils.plot_frametimes(os.path.join(root, file))
 #             # plt.plot(data['frameNum'],data['rel_time'])
 #             plt.hist(data['rel_time'], bins=data['rel_time'].max(),alpha=0.1,density=True)
+hist_posttone_fig,hist_posttone_ax = plt.subplots(2,sharex=True)
+hist_posttone_ax[0].hist(utils.filter_df(trial_data,['d0','b1'])['PostTone_Duration'],bins=np.arange(0,3.5,.5),density=True,alpha=1)
+hist_posttone_ax[1].hist(utils.filter_df(trial_data,['d!0','b1'])['PostTone_Duration'],bins=np.arange(0,3.5,.5),density=True,alpha=1)

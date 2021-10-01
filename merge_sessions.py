@@ -92,15 +92,14 @@ def merge_sessions(datadir,animal_list,filestr_cond, datestr_format='%y%m%d'):
 #     # print('Time taken ',t1-t0)
 #     return df
 def get_fractioncorrect(data_df, stimlen_range,animal_list):
-    
-    print(f'stim var={stimlen_range}, animals ={animal_list}')
+
     performance = []
     ntrial_list = []
     for animal in animal_list:
         stim_perfomance = []
         animal_df = data_df.loc[animal]
         ntrial_list.append(animal_df.shape[0])
-        for stim in range(stimlen_range[0],stimlen_range[0]):
+        for stim in range(stimlen_range):
             stim_df = animal_df[animal_df['Stim1_Duration'] == stim]['Trial_Outcome']
             stim_correct = stim_df == 1
             stim_perfomance.append(stim_correct.mean())
@@ -132,16 +131,16 @@ def filter_df(data_df, filters, fildict):
 
 
 animals = [
-            'ES01',
-            'ES02',
-            'ES03',
+            # 'DO27',
+            # 'DO28',
+            'DO39',
 ]
 
 
 
 
-datadir = r'C:\Users\Ella Svahn\Git\data\Ella'
-date_range =['09/09/2021', '10/09/2021']
+datadir = r'C:\bonsai\data\Dammy'
+date_range =['24/09/2021', '24/09/2021']
 
 
 # params = merge_sessions(datadir,animals,'params')
@@ -157,7 +156,7 @@ marker_colors = ['b','r','c','m','y','g']
 trial_data = merge_sessions(datadir,animals,'TrialData')
 trial_data = pd.concat(trial_data, sort=False, axis=0)
 
-fractioncorrect = get_fractioncorrect(trial_data, [2,7], animals)
+fractioncorrect = get_fractioncorrect(trial_data, [2,7], trial_data.keys().unique()[0])
 
 def plot_performance(animal_list,stimlen_range):
     perfomance_plot, perfomance_ax = plt.subplots(1, 1)
@@ -216,7 +215,7 @@ reaction_ax.set_xlabel('')
 reaction_ax.legend(loc=9,ncol=len(animals))
 reaction_ax.set_ylabel('Reaction Time (seconds)')
 reaction_ax.axhline(0.5,linestyle='--',color='grey',linewidth=0.5)
-"""
+
 # stage2 reaction time only
 stage2_stimdur_series = np.array([timedelta(seconds=t) for t in trial_data['Stim1_Duration']])
 stage2_reactions = trial_end_series-trial_start_series-stage2_stimdur_series
@@ -314,19 +313,11 @@ gotone_viol_ax.set_xlabel('Go Tone Amplitude (db)')
 gotone_viol_ax.set_ylabel('Reaction Time (s)')
 gotone_viol_ax.set_title('Stage 2 reaction times vs Go Tone Amplitude')
 
-"""
 
-# total_valvetime = animal_correct_trials['ValveTime'].sum()
+
+total_valvetime = animal_correct_trials['Reward_Amount'].sum()
 # print(total_valvetime*.112)
 
-# def cal_step_mean(start,step,iters,thresh):
-#     amount = start
-#     tally = 0
-#     for i in range(iters):
-#         tally+=amount
-#         if i%thresh ==0 and i>0:
-#             amount+=step
-#     return tally, tally/iters
 
 # session_dfs = plot_sessions.subset_dates(trial_data)
 # plot_sessions.plt_sess_features(session_dfs,['Trial_Outcome'])

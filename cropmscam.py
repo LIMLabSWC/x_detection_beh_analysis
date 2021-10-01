@@ -15,13 +15,19 @@ def sorted_alphanumeric(data):
 
 viddir = sys.argv[1]
 print(viddir,type(viddir))
-if len(sys.argv) < 3:
+if len(sys.argv) < 4:
     cropbox = [250,250]
 else:
-    cropbox = [int(item) for item in sys.argv[2].split(',')]
+    cropbox = [int(item) for item in sys.argv[3].split(',')]
+if len(sys.argv) < 3:
+    vidtype = '.avi'
+else:
+    vidtype = sys.argv[2]
+    print(vidtype)
 
 # get all filenames of vids into text files to interate
-list_allfiles = sorted_alphanumeric(glob.glob(f'{viddir}/*.avi'))
+
+list_allfiles = sorted_alphanumeric(glob.glob(f'{viddir}/*{vidtype}'))
 allfilesstr = [f"file '{filename}'" for filename in list_allfiles]
 with open(os.path.join(viddir,'allfiles.txt'),'w') as vidsfile:
     [vidsfile.write(f'{line} \n') for line in allfilesstr]
@@ -54,11 +60,13 @@ for vid in vids:  # vid is a abs filepath
     vidin = os.path.join(viddir,vid.replace("'",''))
     script = f'ffmpeg -i {vidin} -filter:v crop={cropbox[0]}:{cropbox[1]}:{cropparams[0]}:{cropparams[1]} {savename}_crop.avi'
     # print(script)
-    subprocess.run(script.split())
+    # subprocess.run(script.split())
 
-list_allcrops = sorted_alphanumeric(glob.glob(os.path.join(viddir,"crop","*.avi"))) 
+
+list_allcrops = sorted_alphanumeric(glob.glob(os.path.join(viddir,f'crop/*{vidtype}'))) 
+# print(list_allcrops)
 allcropsstr = [f"file '{filename}'" for filename in list_allcrops]
-print(allcropsstr[0])
+# print(allcropsstr[0])
 with open(os.path.join(viddir,'crop','allfiles.txt'),'w') as vidsfile:
     [vidsfile.write(f'{line} \n') for line in allcropsstr]
 subprocess.run(f'ffmpeg -f concat -safe 0 -i {os.path.join(viddir,"crop","allfiles.txt")} -c copy {os.path.join(viddir,"crop","sessionvid.avi")}'.split())
