@@ -15,6 +15,7 @@ import time
 from datetime import datetime, timedelta
 from matplotlib import pyplot as plt
 import matplotlib.pylab as pylab
+plt.rcParams.update({'font.size':16})
 import seaborn as sns
 #import plot_sessions
 
@@ -128,7 +129,7 @@ animals = ['ES01',
 datadir = r'C:\Users\Ella Svahn\Git\data\Ella'
 date_range =[
              '13/09/2021',
-             '29/09/2021',
+             '28/09/2021',
              ]
 
 
@@ -174,25 +175,42 @@ sns.despine()
 plt.ylabel('Fraction correct')
 plt.xlabel('Days')
 plt.ylim(0,1)
+
 #plt.xticks([210909,210910],[0,1])
 plt.title('Performance Stage 0')
 fig.axes.xaxis.set_ticklabels([])
 
 
 #%%
-# Stage 1
+# Stage 1 short tones
 #[trial_data.Stim1_Duration<0.5]
+fig = plt.subplot()
+sns.pointplot(data=trial_data[trial_data.Stim1_Duration <0.5].groupby(['Name','Date']).mean().reset_index(),x= 'Date',y='Trial_Outcome', hue = 'Name', palette = 'mako')
+#plt.axhline(y=0.5, c='0.5', linestyle = '--')
+plt.ylim(0,1.1)
+sns.despine()
+plt.ylabel('Fraction correct')
+plt.xlabel('Days')
+plt.title('Stage 1: long tone durations')
+fig.axes.xaxis.set_ticklabels([])
+plt.gca().legend_.remove()
+
+
+#%%
+# Stage 1
+
 fig = plt.subplot()
 sns.pointplot(data=trial_data[trial_data.Trial_Outcome !=0].groupby(['Name','Date']).mean().reset_index(),x= 'Date',y='Trial_Outcome', hue = 'Name', palette = 'mako')
 #plt.axhline(y=0.5, c='0.5', linestyle = '--')
 sns.despine()
 plt.ylabel('Fraction correct')
 plt.xlabel('Days')
-#plt.ylim(-0.1,1)
-#plt.yticks([1,0.7,0.4,0.1,-0.2,-0.5])
+plt.ylim(-1,1)
+#plt.yticks([1,0.6,0.4,0,-0.4,-0.6,-1])
 plt.title('Performance Stage 1: long tone durations ')
 fig.axes.xaxis.set_ticklabels([])
-#fig.axes.yaxis.set_ticklabels([])
+fig.axes.yaxis.set_ticklabels([])
+plt.gca().legend_.remove()
 
 
  #%%
@@ -203,7 +221,7 @@ sns.scatterplot(data=trial_data[trial_data.WarmUp==False].groupby(['Name','Date'
 #plt.axhline(y=0.5, c='0.5', linestyle = '--')
 sns.despine()
 plt.ylabel('Fraction correct')
-plt.xlabel('Tone duration before X (s)')
+plt.xlabel('Tone duration (s)')
 plt.ylim(0,1)
 plt.xlim(0,2.1)
 #plt.xticks([1, 2, 3, 4,5,6,7,8,9,10,11,12,13,14])
@@ -236,33 +254,20 @@ plt.xlabel('Days')
 plt.ylim(0,1)
 fig.axes.xaxis.set_ticklabels([])
 
-#%% right vs left side correct for all mice
+#%% choice ratio to show antibias
+Rcorr = trial_data.Trial_Outcome[trial_data.RewardedSide==1].groupby(['Name','Date']).mean()
+Lcorr = trial_data.Trial_Outcome[trial_data.RewardedSide==2].groupby(['Name','Date']).mean()
+prob_L = Rcorr/Lcorr
+
 fig = plt.subplot()
-sns.pointplot(data=trial_data[trial_data.RewardedSide==1].groupby(['Name','Date']).mean().reset_index(),x= 'Date',y='Trial_Outcome', hue = 'Name', palette = 'Set2')
-sns.pointplot(data=trial_data[trial_data.RewardedSide==2].groupby(['Name','Date']).mean().reset_index(),x= 'Date',y='Trial_Outcome', hue = 'Name')
+sns.pointplot(data=prob_L.groupby(['Name','Date']).mean().reset_index(),x= 'Date',y='Trial_Outcome', hue = 'Name', palette = 'mako')
+plt.ylabel('Choice side ratio')
 sns.despine()
-plt.title('% R correct ')
-plt.ylabel('Fraction correct')
-plt.xlabel('Days')
-plt.ylim(0,1)
 fig.axes.xaxis.set_ticklabels([])
+plt.xlabel('Days')
 
 
-#%%
-#trial by Ella to calculate performace for all stimuli lengths 
-correct_trials = []
-performance = []
-stdev = []
-ntrial_list = []
-for animal in animals:
-    animal_df = trial_data.loc[animal]
-    ntrial_list.append(animal_df.shape[0])
-    for trial in ntrial_list:    #was prev range(2,7)
-        correct_trials.append(animal_df[animal_df['Trial_Outcome'==1]])
-        stim_perfomance.append(stim_correct.mean())
-        stdev.append(stim_correct.std())
-    performance.append(stim_perfomance)
-    stdev.append(stim_stdev)
+ 
 
 #%%
 def get_fractioncorrect(data_df, animal_list):
