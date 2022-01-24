@@ -15,7 +15,9 @@ import time
 from datetime import datetime, timedelta
 from matplotlib import pyplot as plt
 import matplotlib.pylab as pylab
-import plot_sessions
+plt.rcParams.update({'font.size':16})
+import seaborn as sns
+#import plot_sessions
 
 
 def merge_sessions(datadir,animal_list,filestr_cond, datestr_format='%yy%mm%dd'):
@@ -65,51 +67,48 @@ def merge_sessions(datadir,animal_list,filestr_cond, datestr_format='%yy%mm%dd')
     return file_df
 
 
-# def create_subset_df(data_dict, fields, date_period=('01/01/1000','now'), rats=None):
-#     """
-#
-#     :param data_dict:
-#     :param fields:
-#     :param date_period:
-#     :param rats:
-#     :return:
-#     """
-#     # print('starting')
-#     t0 = time.time()
-#     if rats is None or len(rats) < 1 or not isinstance(rats[0], str):
-#         rats = list(data_dict.keys())
-#     # print(type(data_dict),date_period,rats)
-#     dates_dict = subset_dates(data_dict,date_period,rats)
-#     #     # list_rat_dfs = []
-#     rsf = []
-#     for r in rats:  # r is rat name i.e keys for dictionary
-#         for s in data_dict[r]:
-#             sess_date = extract_val(s['SavingSection_SaveTime']).split()
-#             if sess_date[0] in dates_dict[r][1]:
-#                 use = 1
-#             else:
-#                 use = 0
-#             if use == 1:
-#                 val = []
-#                 for f in fields:
-#                     val.append(extract_val(s[f]))
-#                 rsf.append([r]+val)
-#
-#     df = pd.DataFrame(rsf)
-#     t1 = time.time()
-#     # print('Time taken ',t1-t0)
-#     return df
+'''
+def create_subset_df(data_dict, fields, date_period=('01/01/1000','now'), rats=None):
+    """
 
+     :param data_dict:
+     :param fields:
+     :param date_period:
+     :param rats:
+     :return:
+    """
+     # print('starting')
+     t0 = time.time()
+     if rats is None or len(rats) < 1 or not isinstance(rats[0], str):
+         rats = list(data_dict.keys())
+     # print(type(data_dict),date_period,rats)
+     dates_dict = subset_dates(data_dict,date_period,rats)
+     #     # list_rat_dfs = []
+     rsf = []
+     for r in rats:  # r is rat name i.e keys for dictionary
+         for s in data_dict[r]:
+             sess_date = extract_val(s['SavingSection_SaveTime']).split()
+             if sess_date[0] in dates_dict[r][1]:
+                 use = 1
+             else:
+                 use = 0
+             if use == 1:
+                 val = []
+                 for f in fields:
+                     val.append(extract_val(s[f]))
+                 rsf.append([r]+val)
+
+     df = pd.DataFrame(rsf)
+     t1 = time.time()
+     # print('Time taken ',t1-t0)
+     return df
+'''
 
 # params = merge_sessions(datadir,animals,'params')
 # summary_data = merge_sessions(datadir,animals,'params')
-# print(f'len animals={len(animals)}, len params = {len(params)}')
-
 # current_params = [animal.tail(1) for animal in params]
 # current_params = pd.concat(current_params)
-#
 # summary_data = pd.concat(summary_data)
-marker_colors = ['b','r','c','m','y','g']
 
 # params = {'legend.fontsize': 'x-large',
 #           'figure.figsize': (9, 6),
@@ -119,56 +118,196 @@ marker_colors = ['b','r','c','m','y','g']
 #          'ytick.labelsize':'medium'}
 # plt.rcParams.update(params)
 
-animals = [
-            'ES01',
+marker_colors = ['b','r','c','m','y','g']
+
+animals = ['ES01',
             'ES02',
-            'ES03',
+            'ES03'
+            
 ]
 
-
 datadir = r'C:\Users\Ella Svahn\Git\data\Ella'
-date_range =['09/09/2021',
-             '10/09/2021',
+date_range =[
              '13/09/2021',
-             '14/09/2021',
-             '15/09/2021',
-             '16/09/2021',
-             '17/09/2021',
-             '22/09/2021',
-             '23/09/2021']
+             '28/09/2021',
+             ]
+
 
 trial_data = merge_sessions(datadir,animals,'TrialData')
 trial_data = pd.concat(trial_data, sort=False, axis=0)
-# do17_stage2 = pd.concat([trial_data.loc['DO17','201012'],trial_data.loc['DO17','201013']])
-# do17_stage2_viols = do17_stage2['Trial_Outcome'] == -1
-# do17_stage2_cum_mean = do17_stage2_viols.expanding().mean()
-# plt.plot(do17_stage2_cum_mean.values)
 
-performance = []
-stdev = []
-ntrial_list = []
+#%%
+trial_df = trial_data
+trial_list=[]
 for animal in animals:
-    stim_perfomance = []
-    stim_stdev = []
-    animal_df = trial_data.loc[animal]
-    ntrial_list.append(animal_df.shape[0])
-    for stim in range(2,7):
-        stim_df = animal_df[animal_df['Stim1_Duration'] == stim]['Trial_Outcome']
-        stim_correct = stim_df == 1
-        stim_perfomance.append(stim_correct.mean())
-        stim_stdev.append(stim_correct.std())
-    performance.append(stim_perfomance)
-    stdev.append(stim_stdev)
-
+    animal_df = trial_df.loc[animal]
+    trial_list.append(animal_df.shape[0])
+    for trial in trial_list:
+        if trial_data[trial_data.Trial_Outcome==1][trial]:
+            animal_df['Correct'][trial]=1
+        elif trial_data[trial_data.Trial_Outcome==-1][trial]:
+            animal_df['Correct'][trial]=0    
 
 
 #%%
+correct= []
+violation=[]
+abort=[]
+trialList=[trial_df.shape[0]]
+for trial in range(len(trialList)):
+    if trial_data[trial][trial_data.Trial_Outcome==1]:
+        correct.append(trial)
+    elif trial_data[trial_data.Trial_Outcome==-1]:
+        violation.append(trial)    
+    elif trial_data[trial_data.Trial_Outcome==0]:
+        abort.append(trial)
+        
+
+        
+
+#%% simple seaborn performance plot: performance per mouse per day, all stim lenths 
+# Stage 0
+
+fig =plt.subplot()
+sns.pointplot(data=trial_data.groupby(['Name','Date']).mean().reset_index(),x= 'Date',y='Trial_Outcome', hue = 'Name', palette = 'mako')
+#plt.axhline(y=0.5, c='0.5', linestyle = '--')
+sns.despine()
+plt.ylabel('Fraction correct')
+plt.xlabel('Days')
+plt.ylim(0,1)
+
+#plt.xticks([210909,210910],[0,1])
+plt.title('Performance Stage 0')
+fig.axes.xaxis.set_ticklabels([])
+
+
+#%%
+# Stage 1 short tones
+#[trial_data.Stim1_Duration<0.5]
+fig = plt.subplot()
+sns.pointplot(data=trial_data[trial_data.Stim1_Duration <0.5].groupby(['Name','Date']).mean().reset_index(),x= 'Date',y='Trial_Outcome', hue = 'Name', palette = 'mako')
+#plt.axhline(y=0.5, c='0.5', linestyle = '--')
+plt.ylim(0,1.1)
+sns.despine()
+plt.ylabel('Fraction correct')
+plt.xlabel('Days')
+plt.title('Stage 1: long tone durations')
+fig.axes.xaxis.set_ticklabels([])
+plt.gca().legend_.remove()
+
+
+#%%
+# Stage 1
+
+fig = plt.subplot()
+sns.pointplot(data=trial_data[trial_data.Trial_Outcome !=0].groupby(['Name','Date']).mean().reset_index(),x= 'Date',y='Trial_Outcome', hue = 'Name', palette = 'mako')
+#plt.axhline(y=0.5, c='0.5', linestyle = '--')
+sns.despine()
+plt.ylabel('Fraction correct')
+plt.xlabel('Days')
+plt.title('Performance Stage 1: long tone durations ')
+fig.axes.xaxis.set_ticklabels([])
+fig.axes.yaxis.set_ticklabels([])
+plt.gca().legend_.remove()
+
+
+ #%%
+# Stage 1 performance vs stim1 dur
+fig = plt.subplot()
+ 
+sns.scatterplot(data=trial_data[trial_data.WarmUp==False].groupby(['Name','Date']).mean().reset_index(),x= 'Stim1_Duration',y='Trial_Outcome', hue = 'Name', palette = 'mako')
+#plt.axhline(y=0.5, c='0.5', linestyle = '--')
+sns.despine()
+plt.ylabel('Fraction correct')
+plt.xlabel('Tone duration (s)')
+plt.ylim(0,1)
+plt.xlim(0,2.1)
+#plt.xticks([1, 2, 3, 4,5,6,7,8,9,10,11,12,13,14])
+#plt.title('Stimulus duration increases throughout Stage 1')
+#fig.axes.xaxis.set_ticklabels([])
+
+#%%
+#decrease in reward attempts over time
+fig = plt.subplot()
+sns.pointplot(data=trial_data[trial_data.Trial_Outcome !=0].groupby(['Name','Date']).mean().reset_index(),x= 'Date',y='Reward_Attempts', hue = 'Name', palette = 'mako')
+#plt.axhline(y=0.5, c='0.5', linestyle = '--')
+sns.despine()
+plt.ylabel('Reward attempts')
+plt.xlabel('Days')
+plt.title('Reward attempts')
+fig.axes.xaxis.set_ticklabels([])
+#fig.axes.yaxis.set_ticklabels([])
+
+
+#%% Final performance per side (L vs R) to show that antibias works 
+# mean across mice  
+fig = plt.subplot()
+sns.pointplot(data=trial_data.groupby(['RewardedSide','Date']).mean().reset_index(),x= 'Date',y='Trial_Outcome', hue = 'RewardedSide', palette = 'Set2')
+sns.despine()
+plt.title('Mean % correct for L & R')
+plt.ylabel('Fraction correct')
+plt.xlabel('Days')
+plt.ylim(0,1)
+fig.axes.xaxis.set_ticklabels([])
+
+#%% choice ratio to show antibias
+Rcorr = trial_data.Trial_Outcome[trial_data.RewardedSide==1].groupby(['Name','Date']).mean()
+Lcorr = trial_data.Trial_Outcome[trial_data.RewardedSide==2].groupby(['Name','Date']).mean()
+prob_L = Rcorr/Lcorr
+
+fig = plt.subplot()
+sns.pointplot(data=prob_L.groupby(['Name','Date']).mean().reset_index(),x= 'Date',y='Trial_Outcome', hue = 'Name', palette = 'mako')
+plt.ylabel('Choice side ratio')
+sns.despine()
+fig.axes.xaxis.set_ticklabels([])
+plt.xlabel('Days')
+
+
+ 
+
+#%%
+def get_fractioncorrect(data_df, animal_list):
+    performance = []
+    ntrial_list = []
+    for animal in animals:
+        stim_perfomance = []
+        stim_stdev = []
+        animal_df = trial_data.loc[animal]
+        ntrial_list.append(animal_df.shape[0])
+        for stim in range(0,1):
+            stim_df = animal_df[animal_df['Stim1_Duration'] == stim]['Trial_Outcome']
+            stim_correct = stim_df == 1
+            stim_perfomance.append(stim_correct.mean())
+            stim_stdev.append(stim_correct.std())
+        performance.append(stim_perfomance)
+        stdev.append(stim_stdev)
+    
+'''   
+    performance = []
+    ntrial_list = []
+    for animal in animal_list:
+        stim_perfomance = []
+        animal_df = data_df.loc[animal]
+        ntrial_list.append(animal_df.shape[0])
+        for stim in range(stimlen_range):
+            stim_df = animal_df[animal_df['Stim1_Duration'] == stim]['Trial_Outcome']
+            stim_correct = stim_df == 1
+            stim_perfomance.append(stim_correct.mean())
+        performance.append(stim_perfomance)
+    return performance, ntrial_list
+'''
+fractioncorrect = get_fractioncorrect(trial_data, trial_data.keys().unique()[0])
+
+
+#%%
+marker_colors = ['b','r','c','m','y','g']
+
 perfomance_plot, perfomance_ax = plt.subplots(1,1)
 for i, animal in enumerate(animals):
     perf = np.array(performance[i])
     std = np.array(stdev[i])
     perfomance_ax.plot(np.arange(2,7),performance[i],label=f'Animal {i}',color=marker_colors[i])
-    # perfomance_ax.plot(np.arange(2,7),perf+std,color=marker_colors[i], linestyle='--')
+    perfomance_ax.plot(np.arange(2,7),perf+std,color=marker_colors[i], linestyle='--')
     # perfomance_ax.plot(np.arange(2,7),perf-std,color=marker_colors[i], linestyle='--')
 
 
@@ -266,8 +405,7 @@ plot_reactiontime(animal_df, reaction_times)
 
 #%% 
 #function to calculate amount of  licking post X tone until reward (predictive licking), menaing the animal has detected the anomaly 
-print(animal_df)
-
+# UNFINISHED this needs more work
 def get_detectionLicks(animal_df):
   
     for animal in animals: 
