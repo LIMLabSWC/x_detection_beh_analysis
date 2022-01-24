@@ -70,15 +70,38 @@ def get_fractioncorrect(data_df, stimlen_range, animal_list, df_filters=('a3','c
         ntrial_list.append(animal_df.shape[0])
         for stim in stimlen_range:
             stim_df = animal_df[animal_df['Stim1_Duration'] == stim]
-            stim_df01 = filter_df(stim_df, df_filters)  # remove violations and warm up trials
+            stim_df01 = stim_df  # filter_df(stim_df, df_filters)  # remove violations and warm up trials
             n_correct = (stim_df01['Trial_Outcome'] == 1).sum()
-            fraction_correct = float(n_correct)/stim_df01.shape[0]
+            try: fraction_correct = float(n_correct)/stim_df01.shape[0]
+            except ZeroDivisionError:
+                fraction_correct = 0
             stim_performance.append(fraction_correct)
         performance.append(stim_performance)
     return performance, ntrial_list
 
 
 def filter_df(data_df, filters):
+
+    dev_nonorder = []
+    dev_repeat = []
+    unique_devs = sorted(data_df[data_df['Pattern_Type']>0]['PatternID'].unique())
+    for dev in unique_devs:
+        devarray = np.array(dev.split(';')).astype(int)
+        if devarray[1] == devarray[2] or devarray[2] == devarray[3]:
+            dev_repeat.append(dev)
+        else:
+            dev_nonorder.append(dev)
+
+    dev_desc = []
+    dev_assc = []
+    for dev in unique_devs:
+        _parray = np.array(dev.split(';')).astype(int)
+        diff_parray = np.diff(_parray)
+
+        if all(diff_parray >= 0):
+            dev_assc.append(dev)
+        else:
+            dev_desc.append(dev)
 
     fildict = {
         'a0': ['Trial_Outcome', 0],
@@ -94,30 +117,51 @@ def filter_df(data_df, filters):
         'd1': ['Pattern_Type', 1],
         'd2': ['Pattern_Type', 2],
         'd3': ['Pattern_Type', 3],
-        'e!0': ['ToneTime_Scalar',0,'!=']
+        'e!0': ['ToneTime_dt',datetime.strptime('00:00:00','%H:%M:%S'),'!='],
+        'e=0': ['ToneTime_dt',datetime.strptime('00:00:00','%H:%M:%S')],
+        '4pupil': ['na'],
+        'devrep':['PatternID',dev_repeat,'isin'],
+        'devord': ['PatternID', dev_nonorder, 'isin'],
+        'devassc': ['PatternID', dev_assc, 'isin'],
+        'devdesc': ['PatternID', dev_desc, 'isin']
+
     }
 
     df2filter = data_df
     for fil in filters:
         column = fildict[fil][0]
-        cond = fildict[fil][1]
-        if len(fildict[fil]) == 2:
+        if fil == '4pupil':
+            _df = filt4pupil(df2filter)
+        elif len(fildict[fil]) == 2:
+            cond = fildict[fil][1]
             _df = copy(df2filter[df2filter[column] == cond])
         elif len(fildict[fil]) == 3:
+            cond = fildict[fil][1]
             if fildict[fil][2] == '>':
                 _df = copy(df2filter[df2filter[column] > cond])
             elif fildict[fil][2] == '<':
                 _df = copy(df2filter[df2filter[column] < cond])
             elif fildict[fil][2] == '!=':
                 _df = copy(df2filter[df2filter[column] != cond])
+            elif fildict[fil][2] == 'isin':
+                _df = copy(df2filter[df2filter[column].isin(fildict[fil][1])])
             else:
                 print('incorrect format used, filter skipped')
                 _df = df2filter
+
         else:
             print('Incorrect filter config used. Filter skipped')
             _df = df2filter
         df2filter = _df
     return df2filter
+
+
+def filt4pupil(data_df):
+    gd_df = filter_df(data_df, ['a3','c0'])
+    viol_df = filter_df(data_df, ['a2','c0'])
+    # _df = viol_df[(viol_df['Trial_End_dt']-viol_df['ToneTime_dt']).apply(lambda t: t.total_seconds()) >= 2]
+    _df = viol_df[(viol_df['Trial_End_scalar']-viol_df['ToneTime_scalar']) >= 2]
+    return pd.concat([gd_df,viol_df])
 
 
 def plot_performance(data_df, stims, animal_list, date_range, marker_colors):
@@ -144,7 +188,7 @@ def plot_performance(data_df, stims, animal_list, date_range, marker_colors):
 
 
 def plot_metric_v_stimdur(data_df, stims, feature,value, animal_list, date_range, marker_colors, df_filters=None,
-                          plot_title=None, ytitle=None):
+                          plot_title=None, ytitle=None, legend_labels = None, plottype=None):
 
     if date_range[1] == 'now':
         date_range[1] = datetime.strftime(datetime.now(),'%d/%m/%Y')
@@ -160,16 +204,30 @@ def plot_metric_v_stimdur(data_df, stims, feature,value, animal_list, date_range
             animal_df = filter_df(animal_df, df_filters)  # pre filter
         ntrial_list.append(animal_df.shape[0])
         for stim in stims:
+            # print(stim,animal_df['Stim1_Duration'].unique())
             stim_df = animal_df[animal_df['Stim1_Duration'] == stim]
             n_metric = (stim_df[feature] == value).sum()
             # print(f'n metric {n_metric}')
             # print(f'total trials {stim_df.shape[0]}')
-            fraction_metric = float(n_metric)/stim_df.shape[0]
+            try:
+                fraction_metric = float(n_metric)/stim_df.shape[0]
+            except ZeroDivisionError:
+                fraction_metric = 0
             stim_performance.append(fraction_metric)
         performance.append(stim_performance)
+    if legend_labels is not None:
+        animal_list = legend_labels
     for i, animal in enumerate(animal_list):
-        perfomance_ax.plot(stims,performance[i],label=f'{animal},{ntrial_list[i]} Trials',
+        if plottype is None:
+            perfomance_ax.plot(stims,performance[i],label=f'{animal},{ntrial_list[i]} Trials',
                            color=marker_colors[i])
+        elif plottype == 'scatter':
+            perfomance_ax.scatter(stims, performance[i], label=f'{animal},{ntrial_list[i]} Trials',
+                               color=marker_colors[i])
+        else:
+            print('something weird happened')
+            return None
+
     perfomance_ax.set_ylim((0,1.1))
     perfomance_ax.set_xlim((stims.min(), stims.max()))
     perfomance_ax.set_xlabel('Stimulus Duration')
@@ -261,3 +319,4 @@ def add_datetimecol(df, colname, timefmt='%H:%M:%S.%f'):
         else:
             datetime_arr.append((datetime.strptime(t,'%H:%M:%S')))
     df[f'{colname}_dt'] = np.array(datetime_arr)
+

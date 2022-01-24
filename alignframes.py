@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from ellipse import LsqEllipse
 from matplotlib import pyplot as plt
 import circle_fit as cf
+from math import pi
 
 
 def matchvid2data(animal,date,starttime,viddir):
@@ -37,23 +38,9 @@ def fit_elipse(point_array):
 
     # circle fit method
     # xc, yc, r, _ = cf.least_squares_circle(point_array)
-    xc, yc, r, _ = cf.hyper_fit(point_array)
+    xc, yc, r1, r2 = cf.hyper_fit(point_array)
 
-    return (xc,yc), r, r
-
-
-toprocess_dict = dict()
-
-animals = [
-            # 'DO27',
-            'DO39',
-            # 'DO29',
-]
-
-for animal in animals:
-    toprocess_dict[animal] = dict()
-
-# def find_h5files(h5dir, names):
+    return (xc,yc), r1, r2
 
 
 def findfiles(startdir,filetype,datadict,animals=None,dates=None):
@@ -74,62 +61,92 @@ def findfiles(startdir,filetype,datadict,animals=None,dates=None):
                         datadict[_animal][_date][f'{filetype}file'] = os.path.join(root, file)
 
 
-# find h5 
-findfiles(r'W:\mouse_pupillometry\analysed','h5',toprocess_dict,animals, ['210810'])
-# find camstarts
-findfiles(r'C:\bonsai\data\Dammy','camstart',toprocess_dict,animals, ['210810'])
+def main():
+    toprocess_dict = dict()
 
-list_h5pupils = []
-timestampdir = r'W:\mouse_pupillometry\cropsessionvids'
-for animal in toprocess_dict.keys():
-    for date in toprocess_dict[animal].keys():
-        if 'h5file' in toprocess_dict[animal][date].keys():
-            camstart = pd.read_csv(toprocess_dict[animal][date]['camstartfile'],header=None)[0][0]
-            h5pupildf = pd.read_hdf(toprocess_dict[animal][date]['h5file'])
-            camstart_dt = datetime.strptime(camstart[:-1], '%H:%M:%S.%f')
-            frame_timestamps = matchvid2data(animal,date,camstart_dt,timestampdir)
+    animals = [
+                'DO27',
+                'DO28',
+                'DO29',
+                'DO37',
+                # 'DO42',
+                'DO43',
+                # 'ES01',
+                # 'ES02'
+                # 'ES03'
+    ]
 
-            h5pupildf['frametime'] = frame_timestamps['frametime']
-            print('videofile read')
+    for animal in animals:
+        toprocess_dict[animal] = dict()
 
-            toprocess_dict[animal][date]['pupildf'] = h5pupildf
+    # find h5
+    findfiles(r'W:\mouse_pupillometry\analysed','h5',toprocess_dict,animals,['210427','210428','210430','211022','211026','211028'])  # ['211022','211026','211028','211029']['211105']
+    # find camstarts
+    findfiles(r'C:\bonsai\data','camstart',toprocess_dict,animals,['210427','210428','210430','211022','211026','211028'])  # ['211022','211026','211028','211029'] ['211105']
 
-scorer = 'DLC_resnet50_pupildiamterApr28shuffle1_900000'
-for animal in toprocess_dict.keys():
-    for date in toprocess_dict[animal].keys():
-        if 'pupildf' in toprocess_dict[animal][date].keys():
-            df = toprocess_dict[animal][date]['pupildf']
-            bodypoints = np.array(df)
-            diams_ = []
-            for row in bodypoints:
-                reshaped = row[0:24].reshape([8,3])
-                goodpoints = reshaped[reshaped[:,2]>.5].astype(float)
-                if goodpoints.shape[0] < 3:
-                    diams_.append(0.0)
-                else:
-                    frame_elipse = fit_elipse(goodpoints[:,[0,1]])
-                    diams_.append((frame_elipse[1]+frame_elipse[2])/2)
-            eyeEW_arr = np.array(df[scorer,'eyeW']-df[scorer,'eyeE'])
-            diams = np.linalg.norm(eyeEW_arr,axis=1)
-            # toprocess_dict[animal][date]['pupildf']['diameter'] = diams
-            toprocess_dict[animal][date]['pupildf']['diameter'] = diams_
-            df2save = toprocess_dict[animal][date]['pupildf']
-            h5filename = f'{animal}_{date}_pupildata.h5'
-            # df2save.to_hdf(os.path.join(r'W:\mouse_pupillometry\analysed',h5filename))
-            df2save.to_csv(os.path.join(r'W:\mouse_pupillometry\analysed',h5filename.replace('.h5','_hypcffit.csv')))
-# bodyparts = [
-# 'eyeN',
-# 'eyeNE',
-# 'eyeE',
-# 'eyeSE',
-# 'eyeS',
-# 'eyeSW',
-# 'eyeW',
-# 'eyeNW'
-# ]
-# colors = cm.rainbow(np.linspace(0, 1, len(bodyparts)))
-# for i, eyepart in enumerate(bodyparts):
-#     plt.hist(df[scorer,eyepart]['likelihood'],alpha=.25,label=eyepart,edgecolor='None',color=colors[i])
-# for i, eyepart in enumerate(bodyparts):
-#     plt.hist(df[scorer,eyepart]['likelihood'],alpha=.25,label=eyepart,ls='dashed', lw=3, facecolor="None")
-# plt.legend()
+    list_h5pupils = []
+    timestampdir = r'W:\mouse_pupillometry\cropsessionvids'
+    for animal in toprocess_dict.keys():
+        for date in toprocess_dict[animal].keys():
+            if 'h5file' in toprocess_dict[animal][date].keys():
+                camstart = pd.read_csv(toprocess_dict[animal][date]['camstartfile'],header=None)[0][0]
+                h5pupildf = pd.read_hdf(toprocess_dict[animal][date]['h5file'])
+                camstart_dt = datetime.strptime(camstart[:-1], '%H:%M:%S.%f')
+                frame_timestamps = matchvid2data(animal,date,camstart_dt,timestampdir)
+
+                h5pupildf['frametime'] = frame_timestamps['frametime']
+                print('videofile read')
+
+                toprocess_dict[animal][date]['pupildf'] = h5pupildf
+
+    scorer = 'DLC_resnet50_pupildiamterApr28shuffle1_200000'
+    for animal in toprocess_dict.keys():
+        for date in toprocess_dict[animal].keys():
+            if 'pupildf' in toprocess_dict[animal][date].keys():
+                df = toprocess_dict[animal][date]['pupildf']
+                bodypoints = np.array(df)
+                diams_ = []
+                centers_ = []
+                for row in bodypoints:
+                    reshaped = row[0:24].reshape([8,3])
+                    goodpoints = reshaped[reshaped[:,2]>.3].astype(float)
+                    if goodpoints.shape[0] < 3:
+                        diams_.append(0.0)
+                        centers_.append([0,0])
+
+                    else:
+                        frame_elipse = fit_elipse(goodpoints[:,[0,1]])
+                        diams_.append((frame_elipse[1]*frame_elipse[2])*pi)  # area
+                        # diams_.append(np.array([frame_elipse[1],frame_elipse[2]]).max())  # ew
+                        # diams_.append(frame_elipse[1])
+                        centers_.append(frame_elipse[0])
+
+                # eyeEW_arr = np.array(df[scorer,'eyeW']-df[scorer,'eyeE'])
+                # diams = np.linalg.norm(eyeEW_arr,axis=1)
+                # toprocess_dict[animal][date]['pupildf']['diameter'] = diams
+                toprocess_dict[animal][date]['pupildf']['diameter'] = diams_
+                toprocess_dict[animal][date]['pupildf']['xcyc'] = centers_
+                df2save = toprocess_dict[animal][date]['pupildf']
+                h5filename = f'{animal}_{date}_pupildata.h5'
+                # df2save.to_hdf(os.path.join(r'W:\mouse_pupillometry\analysed',h5filename))
+                df2save.to_csv(os.path.join(r'W:\mouse_pupillometry\analysed',h5filename.replace('.h5','_hypcffit.csv')))
+    # bodyparts = [
+    # 'eyeN',
+    # 'eyeNE',
+    # 'eyeE',
+    # 'eyeSE',
+    # 'eyeS',
+    # 'eyeSW',
+    # 'eyeW',
+    # 'eyeNW'
+    # ]
+    # colors = cm.rainbow(np.linspace(0, 1, len(bodyparts)))
+    # for i, eyepart in enumerate(bodyparts):
+    #     plt.hist(df[scorer,eyepart]['likelihood'],alpha=.25,label=eyepart,edgecolor='None',color=colors[i])
+    # for i, eyepart in enumerate(bodyparts):
+    #     plt.hist(df[scorer,eyepart]['likelihood'],alpha=.25,label=eyepart,ls='dashed', lw=3, facecolor="None")
+    # plt.legend()
+
+
+if __name__ == '__main__':
+    main()

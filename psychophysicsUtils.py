@@ -526,7 +526,7 @@ def frequencyFilter(dataArray,timeArray,cutoff_freq,cutoff_width,highpass=False,
 	f = fftpack.fftfreq(dataArray.size, dt)
 	fil = 1/(1 + np.exp(-(4/cutoff_width)*(np.abs(f) - cutoff_freq))) #logistic curve (abs for positive and negative frequencies)
 	if highpass == False: fil = 1 - fil 
-	plt.figure(0)
+	# plt.figure(0)
 	#plt.plot(f,fil)
 	#plt.title("Filter")
 	#plt.xlabel("Frequency / Hz")
@@ -690,9 +690,10 @@ class pupilDataClass():
 		self.pupilDiams, self.isInterpolated = interpolateArray(self.pupilDiams, self.times, gapExtension=gapExtension)
 		print("Data: %.2f%%  missing, %.2f%% outliers, %.2f%% interpolated" %(100*np.mean((self.rawPupilDiams == 0)), 100*np.mean(self.isOutlier),100*np.mean(self.isInterpolated)))
 
-	def frequencyFilter(self, lowF=0.1, lowFwidth=0.01, highF=4, highFwidth=0.5):
+	def frequencyFilter(self, lowF=0.1, lowFwidth=0.01, highF=4, highFwidth=0.5,do_highpass=True):
 		self.pupilDiams = frequencyFilter(self.pupilDiams,self.times,cutoff_freq=highF, cutoff_width=highFwidth, highpass=False)
-		self.pupilDiams = frequencyFilter(self.pupilDiams,self.times,cutoff_freq=lowF, cutoff_width=lowFwidth, highpass=True)
+		if do_highpass:
+			self.pupilDiams = frequencyFilter(self.pupilDiams,self.times,cutoff_freq=lowF, cutoff_width=lowFwidth, highpass=True)
 
 	def zScore(self):
 		self.pupilDiams = zScore(self.pupilDiams, normrange=[60,self.times[-1]-60]) 
@@ -1214,7 +1215,7 @@ def saveFigure(fig,saveTitle=None):
 		saveTitle=""
 	figdir = f"./figures/{today}/"
 	now = datetime.strftime(datetime.now(),'%H%M')
-	fig.savefig(f"{figdir}{saveTitle}_{now}.png", dpi=300,tight_layout=True)
+	fig.savefig(f"{figdir}{saveTitle}_{now}.png", dpi=300,bbox_inches='tight')
 	
 	return
 
