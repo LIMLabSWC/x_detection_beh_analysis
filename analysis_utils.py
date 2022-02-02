@@ -82,12 +82,12 @@ def get_fractioncorrect(data_df, stimlen_range, animal_list, df_filters=('a3','c
 
 def filter_df(data_df, filters):
 
-    dev_nonorder = []
+    dev_nonorder = [] 
     dev_repeat = []
     unique_devs = sorted(data_df[data_df['Pattern_Type']>0]['PatternID'].unique())
     for dev in unique_devs:
         devarray = np.array(dev.split(';')).astype(int)
-        if devarray[1] == devarray[2] or devarray[2] == devarray[3]:
+        if devarray[1] == devarray[2] or devarray[2] == devarray[3]: 
             dev_repeat.append(dev)
         else:
             dev_nonorder.append(dev)
@@ -102,6 +102,16 @@ def filter_df(data_df, filters):
             dev_assc.append(dev)
         else:
             dev_desc.append(dev)
+
+    # subset normals
+    unique_norms = sorted(data_df[data_df['Pattern_Type']==0]['PatternID'].unique())
+    normtrain = [np.array([15,17,19,20]),np.array([20,22,24,25])]  
+    normtest = []
+    for pat in unique_norms:
+        _parray = np.array(pat.split(';')).astype(int)
+        if _parray not in normtrain:
+            normtest.append(_parray)
+
 
     fildict = {
         'a0': ['Trial_Outcome', 0],
@@ -123,7 +133,9 @@ def filter_df(data_df, filters):
         'devrep':['PatternID',dev_repeat,'isin'],
         'devord': ['PatternID', dev_nonorder, 'isin'],
         'devassc': ['PatternID', dev_assc, 'isin'],
-        'devdesc': ['PatternID', dev_desc, 'isin']
+        'devdesc': ['PatternID', dev_desc, 'isin'],
+        'normtrain':['PatternID', normtrain, 'isin'],
+        'normtest':['PatternID', normtest, 'isin']
 
     }
 
@@ -320,3 +332,247 @@ def add_datetimecol(df, colname, timefmt='%H:%M:%S.%f'):
             datetime_arr.append((datetime.strptime(t,'%H:%M:%S')))
     df[f'{colname}_dt'] = np.array(datetime_arr)
 
+def align2eventScalar(df,pupilsize,pupiltimes, pupiloutliers,beh, dur, rate, filters=('4pupil','b1','c1'), baseline=False,eventshift=0,
+                      outlierthresh=0.9,stdthresh=3,subset=None):
+
+    pupiltrace = pd.Series(pupilsize,index=pupiltimes)
+    outlierstrace = pd.Series(pupiloutliers,index=pupiltimes)
+    filtered_df = utils.filter_df(df,filters)
+    t_len = int((abs(dur[0]) + abs(dur[1])) / rate)+1
+    dur = np.array(dur)
+    # print(t_len)
+    eventpupil_arr = np.full((filtered_df.shape[0],t_len),np.nan)  # int((np.abs(dur).sum()+rate) * 1/rate))
+    outliers = 0
+    varied = 0
+    if eventshift != 0:
+        dur = dur + eventshift
+        # print(dur)
+    for i, eventtime in enumerate(filtered_df[beh]):
+        # print(pupiltrace)
+        # print(eventtime + timedelta(seconds=float(dur[0])),eventtime + timedelta(seconds=float(dur[1])))
+
+        eventpupil = copy(pupiltrace.loc[eventtime + dur[0]: eventtime + dur[1]])
+        eventoutliers = copy(outlierstrace.loc[eventtime + dur[0]: eventtime + dur[1]])
+        # print((eventoutliers == 0.0).sum(),float(len(eventpupil)))
+        if (eventoutliers == 1.0).sum()/float(len(eventpupil)) > outlierthresh:
+            # print(f'pupil trace for trial {i} incompatible',(eventoutliers == 1).sum())
+            outliers += 1
+        elif eventpupil.abs().max() > stdthresh:
+            # print(f'pupil trace for trial {i} incompatible')
+            varied += 1
+
+        else:
+            # print('diff',eventpupil.loc[eventtime - 1-eventshift]-eventpupil.loc[eventtime + 1-eventshift])
+            if baseline:
+                baseline_dur = 1.0
+                baseline_mean = np.nanmean(eventpupil.loc[eventtime - (baseline_dur-eventshift):
+                                               eventtime + eventshift])
+                eventpupil = eventpupil - baseline_mean
+                # # regress out
+                # if np.isnan(baseline_mean) is False:
+                #     reg = LinearRegression().fit(np.full_like(pupildiams,baseline_mean).reshape(-1, 1), pupildiams)
+                #     eventpupil = eventpupil - (reg.coef_ * eventpupil + reg.intercept_) - baseline_mean
+            if len(eventpupil)>0:
+                zeropadded = np.zeros_like(eventpupil_arr[i])
+                zeropadded[:len(eventpupil)] = eventpupil
+                eventpupil_arr[i] = zeropadded
+    # print(f'Outlier Trials:{outliers}\n Too high varinace trials:{varied}')
+    # print(eventpupil_arr.shape)
+    nonans_eventpuil = eventpupil_arr[~np.isnan(eventpupil_arr).any(axis=1)]
+    if subset is not None:
+        midpnt = nonans_eventpuil.shape[0]/2.0
+        firsts = nonans_eventpuil[:subset,:]
+        middles = nonans_eventpuil[int(midpnt-subset/2.0):int(midpnt+subset/2.0)]
+        lasts = nonans_eventpuil[-subset:,:]
+        # print(firsts.shape,middles.shape,lasts.shape)
+        return [firsts,middles,lasts]
+    else:
+        return nonans_eventpuil
+
+
+def getpatterntraces(data, patterntypes,beh,dur, rate, eventshifts=None,baseline=True,subset=None,regressed=False,dev_subsetdf=None,coord=None):
+
+    list_eventaligned = []
+    if eventshifts is None:
+        eventshifts = np.zeros(len(patterntypes))
+    for i, patternfilter in enumerate(patterntypes):
+        _pattern_tonealigned = []
+        if subset is not None:
+            firsts, mids, lasts = [], [], []
+        if type(data) == pupilDataClass:
+            if regressed:
+                pupil2use = data.pupilRegressed
+            elif coord == 'x':
+                pupil2use = data.xc
+            elif coord == 'y':
+                pupil2use = data.yc
+            else:
+                pupil2use = data.pupilDiams
+            if dev_subsetdf is None:
+                td2use = data.trialData
+            elif dev_subsetdf == 'repeat':
+                td2use = data.dfDevRepeat
+            elif dev_subsetdf == 'order':
+                td2use = data.DevOrder
+            else: return None
+            times2use = data.times
+            outs2use = data.isOutlier
+        elif type(data) == dict:
+            for name in data.keys():
+                if regressed:
+                    pupil2use = data[name].pupilRegressed
+                else:
+                    pupil2use = data[name].pupilDiams
+                td2use = data[name].trialData
+                times2use = data[name].times
+                outs2use = data[name].isOutlier
+        else:
+            print('Incorrect data structure')
+            name = None
+        if isinstance(patternfilter,str):
+            patternfilter = [patternfilter]
+        tone_aligned_pattern = align2eventScalar(td2use,pupil2use,times2use,
+                                                 outs2use,beh,
+                                                 dur,rate,patternfilter,
+                                                 outlierthresh=0.5,stdthresh=4,
+                                                 eventshift=eventshifts[i],baseline=baseline,subset=subset)
+        if subset is not None:
+            firsts.append(tone_aligned_pattern[0])
+            mids.append(tone_aligned_pattern[1])
+            lasts.append(tone_aligned_pattern[2])
+
+        else:
+            _pattern_tonealigned.append(tone_aligned_pattern)
+        if subset is not None:
+            print('len subsests=',len(firsts),len(mids),len(lasts))
+            _pattern_tonealigned.append(np.concatenate(firsts,axis=0))
+            _pattern_tonealigned.append(np.concatenate(mids,axis=0))
+            _pattern_tonealigned.append(np.concatenate(lasts,axis=0))
+
+        list_eventaligned.append(np.concatenate(_pattern_tonealigned, axis=0))
+    return list_eventaligned
+
+
+def plot_eventaligned(eventdata_arr,eventnames,dur,rate,beh,plotax=None,pltsize=(12,9)):
+    if plotax is None:
+        event_fig, event_ax = plt.subplots(1)
+    else:
+        event_fig, event_ax = plotax
+    print(f'length input lists {len(eventdata_arr)}')
+    for i, trace in enumerate(eventdata_arr):
+        tseries = np.linspace(dur[0], dur[1], trace.shape[1])
+        event_ax.plot(tseries, trace.mean(axis=0),
+                      label= f'{eventnames[i]}, {trace.shape[0]} Trials')
+
+    # event_ax.axvline(0, c='k', linestyle='--')
+    # event_ax.axvline(1, c='k', linestyle='--')
+
+        plotvar(trace,(event_fig,event_ax),tseries)
+
+    if beh.find('ToneTime') != -1:
+        rect1 = matplotlib.patches.Rectangle((0, -10), 0.125, 20, linewidth=0, edgecolor='k', facecolor='k', alpha=0.1)
+        rect2 = matplotlib.patches.Rectangle((0.25, -10), 0.125, 20, linewidth=0, edgecolor='k', facecolor='k',
+                                             alpha=0.1)
+        rect3 = matplotlib.patches.Rectangle((0.5, -10), 0.125, 20, linewidth=0, edgecolor='k', facecolor='k',
+                                             alpha=0.1)
+        rect4 = matplotlib.patches.Rectangle((0.75, -10), 0.125, 20, linewidth=0, edgecolor='k', facecolor='k',
+                                             alpha=0.1)
+        event_ax.axvline(0, c='k', alpha=0.5)
+        event_ax.add_patch(rect1)
+        event_ax.add_patch(rect2)
+        event_ax.add_patch(rect3)
+        event_ax.add_patch(rect4)
+    if plotax is None:
+        event_ax.set_xlabel('Time from event (s)')
+        event_ax.set_title(f'Pupil size aligned to {beh}')
+    event_ax.legend()
+
+    return event_fig,event_ax
+
+
+def plotvar(data,plot,timeseries):
+    ci95 = 1*np.std(data,axis=0)/np.sqrt(data.shape[0])
+    print(ci95.shape)
+    plot[1].fill_between(timeseries, data.mean(axis=0)+ci95,data.mean(axis=0)-ci95,alpha=0.1)
+
+
+def get_traces(df2use,datadict,dict2use,align_col,ptypes,_dur,_rate,labels,filters,plt_trace=None,align_name=None):
+    all_normals = []
+    # (df, pupilsize, pupiltimes, pupiloutliers, beh, dur, rate, filters
+    #  =('4pupil', 'b1', 'c1'), baseline = False, eventshift = 0,
+    #                                                      outlierthresh = 0.9, stdthresh = 3, subset = None)
+    if align_name is None:
+        align_name = f'Aligned to {align_col}'
+
+    for ax_ix, session in enumerate(datadict.keys()):
+        sess_ix = session.split('_')
+        df2use.loc[sess_ix[0],sess_ix[1]]
+        alignedtraces = align2eventScalar(df2use.loc[sess_ix[0],sess_ix[1]],datadict[session].pupilDiams, datadict[session].times,datadict[session].isOutlier,
+                                          align_col,_dur,_rate,filters,outlierthresh=0.9,stdthresh=5,baseline=True)
+        dict2use[session] = alignedtraces
+        all_normals.append(alignedtraces[0])
+        plot_eventaligned(alignedtraces, ptypes, _dur,_rate, align_name,
+                          (plt_trace[0],plt_trace[1][ax_ix]))
+        sess_plot = plot_eventaligned(alignedtraces, ptypes, _dur, _rate, 'ToneTime by pattern')
+        sess_plot[1].set_title(f'{labels[ax_ix]}: Pupil response to patterns',size=8)
+        sess_plot[1].set_xlabel('Time from pattern presentation (s)',size=6)
+        sess_plot[1].set_ylabel('Normalised pupil diameter',size=6)
+        sess_plot[1].set_ylim((-1,2))
+        sess_plot[0].set_size_inches(4,3, forward=True)
+        # sess_plot[0].tight_layout()
+        sess_plot[0].savefig(f'{labels[ax_ix]}_{align_name}.png',bbox_inches='tight')
+        plt_trace[ax_ix].set_ylim((-1,2))
+        # plt_trace[ax_ix].set_ylabel(f' {session} zscored pupil size')
+        plt_trace[ax_ix].set_title(f'Pupil Response to Stimulus {session}')
+    all_normals = np.concatenate(all_normals)
+    return all_normals,alignedtraces,sess_plot
+
+
+def align_wrapper(datadict,filters,align_beh, duration, samplerate, alignshifts=None, plotsess=False, plotlabels=None,
+                  plottitle=None, xlabel=None,animal_labels=None,plotsave=False,coord=None):
+    aligned_dict = {}
+    aligned_list = []
+    if plotsess:
+        if all([plotlabels,plottitle,xlabel,animal_labels]):
+            pass
+        else:
+            print('No plot labels or plot title given for plot. Aborting')
+            return None
+    for sessix, sess in enumerate(datadict.keys()):
+        aligned_dict[sess] = getpatterntraces(datadict[sess],filters,align_beh,duration, samplerate,
+                                              baseline=True, eventshifts=alignshifts,coord=coord)
+        if plotsess:
+            sess_plot = plot_eventaligned(aligned_dict[sess],plotlabels,duration,samplerate,plottitle)
+            sess_plot[1].set_title(f'{animal_labels[sessix]}: Pupil response to Pattern',size=8)
+            sess_plot[1].set_xlabel(xlabel,size=6)
+            sess_plot[1].set_ylabel('Normalised pupil diameter',size=6)
+            sess_plot[1].set_ylim((-1,2))
+            sess_plot[0].set_size_inches(4,3, forward=True)
+            if plotsave:
+                sess_plot[0].savefig(f'{animal_labels[ax_ix]}_{align_beh}.png', bbox_inches='tight')
+    aligned_df = pd.DataFrame.from_dict(aligned_dict,orient='index')
+    for ptype in aligned_df.columns:
+        for i, sess in enumerate(aligned_df.index):
+            if i == 0:
+                _array = copy(aligned_df.loc[sess][ptype])
+            else:
+                _array = np.concatenate([_array, copy(aligned_df.loc[sess][ptype])], axis=0)
+        aligned_list.append(_array)
+    return aligned_list,aligned_df
+
+def findfiles(startdir,filetype,datadict,animals=None,dates=None):
+    for root, folder, files in os.walk(startdir):
+        for file in files:
+            if file.find(filetype) != -1:
+                splitstr = file.split('_')
+                _animal = splitstr[0]
+                _date = splitstr[1]
+                if dates is None:
+                    if _date not in datadict[_animal].keys():
+                        datadict[_animal][_date] = dict()
+                    datadict[_animal][_date][f'{filetype}file'] = os.path.join(root,file)
+                elif dates is not None and animals is not None:
+                    if _date in dates and _animal in animals:
+                        if _date not in datadict[_animal].keys():
+                            datadict[_animal][_date] = dict()
+                        datadict[_animal][_date][f'{filetype}file'] = os.path.join(root, file)
