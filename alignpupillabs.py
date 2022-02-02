@@ -1,9 +1,29 @@
 import pandas as pd
 from datetime import datetime
-from alignframes import findfiles
+# from analysis_utils import findfiles
+import os
 from os.path import join
 from functools import lru_cache
 from copy import copy
+
+
+def findfiles(startdir,filetype,datadict,animals=None,dates=None):
+    for root, folder, files in os.walk(startdir):
+        for file in files:
+            if file.find(filetype) != -1:
+                splitstr = file.split('_')
+                _animal = splitstr[0]
+                _date = splitstr[1]
+                if dates is None:
+                    if _date not in datadict[_animal].keys():
+                        datadict[_animal][_date] = dict()
+                    datadict[_animal][_date][f'{filetype}file'] = os.path.join(root,file)
+                elif dates is not None and animals is not None:
+                    if _date in dates and _animal in animals:
+                        if _date not in datadict[_animal].keys():
+                            datadict[_animal][_date] = dict()
+                        datadict[_animal][_date][f'{filetype}file'] = os.path.join(root, file)
+
 
 
 def correctdrift(timeseries, syncseries1, syncseries2) -> pd.Series:
@@ -25,7 +45,7 @@ def correctdrift(timeseries, syncseries1, syncseries2) -> pd.Series:
 
 
 class Main:
-    def __init__(self,animals,dates):
+    def __init__(self, animals, dates, datadir, timesyncdir):
         """
 
         :param animals:
@@ -33,14 +53,16 @@ class Main:
         """
         self.animals = animals
         self.dates = dates
+        self.datadir = datadir
+        self.timesyncdir = timesyncdir
         self.toprocess_dict = dict()
 
     @lru_cache()
     def findfiles(self):
         for animal in self.animals:
             self.toprocess_dict[animal] = dict()
-        findfiles(r'W:\mouse_pupillometry\timeSync_csvs', 'timesync', self.toprocess_dict, self.animals, self.dates)
-        findfiles(r'W:\mouse_pupillometry\analysed', 'extracted_pupils', self.toprocess_dict, self.animals, self.dates)
+        findfiles(self.timesyncdir, 'timesync', self.toprocess_dict, self.animals, self.dates)
+        findfiles(self.datadir, 'extracted_pupils', self.toprocess_dict, self.animals, self.dates)
 
     @lru_cache()
     def align(self, times_path, pupils_path) -> pd.DataFrame:
@@ -50,7 +72,6 @@ class Main:
         :param pupils_path:
         :return:
         """
-
         timescsv = pd.read_csv(times_path, header=None)
         pupilcsv = pd.read_csv(pupils_path)
 
@@ -61,9 +82,9 @@ class Main:
         # format times to timestamps
         timescsv.columns = ['pctime', 'pupiltime', 'bonsaitime']
         timescsv['pctime'] = timescsv['pctime'].apply(lambda e: datetime.strptime(f'010101 {e}',
-                                                                                  '%d%m%y %H:%M:%S.%f').timestamp())
+                                                                                '%d%m%y %H:%M:%S.%f').timestamp())
         timescsv['bonsaitime'] = timescsv['bonsaitime'].apply(lambda e: datetime.strptime(f'010101 {e[:-1]}',
-                                                                                          '%d%m%y %H:%M:%S.%f').timestamp())
+                                                                                        '%d%m%y %H:%M:%S.%f').timestamp())
 
         # correct for any drift in sync
         driftcorrected = correctdrift(pupilcsv_3d['timestamp'], timescsv['pupiltime'], timescsv['bonsaitime'])
@@ -76,20 +97,24 @@ class Main:
         pupilcsv_3d['diameter 2d'] = pupilcsv_2d['diameter_2d [px]']
         return pupilcsv_3d
 
-    @lru_cache
+
+    @lru_cache()
     def main_loop(self):
         self.findfiles()
         for animal in self.toprocess_dict:
             for date in self.toprocess_dict[animal]:
-                print(self.toprocess_dict[animal][date].keys())
                 if 'extracted_pupilsfile' in self.toprocess_dict[animal][date].keys():
-                    print(self.toprocess_dict[animal][date]['timesyncfile'])
-                    aligned = self.align(self.toprocess_dict[animal][date]['timesyncfile'],
-                                         self.toprocess_dict[animal][date]['extracted_pupilsfile'])
                     savename = f'{animal}_{date}_pupildata.csv'
-                    aligned.to_csv(join(r'W:\mouse_pupillometry\analysed',savename),index=False)
+                    if os.path.exists(join(self.datadir,'analysed',savename)):
+                        print('path exists not overwriting')
+                    else:
+                        aligned = self.align(self.toprocess_dict[animal][date]['timesyncfile'],
+                                    self.toprocess_dict[animal][date]['extracted_pupilsfile'])
+                        aligned.to_csv(join(self.datadir,'analysed',savename),index=False)
 
 
 if __name__ == '__main__':
-    run = Main(['ES01','ES02','ES03'],['211208'])
+    humans = [f'Human{i}' for i in range(2,16)]
+    humandates = ['220118','220119','220120','220121','220124','220124','220125','220126','220127','220128']
+    run = Main(humans,humandates,r'W:\humanpsychophysics\HumanXDetection\Data',r'C:\bonsai\data\Hilde\Human\timeSyncs')
     run.main_loop()
