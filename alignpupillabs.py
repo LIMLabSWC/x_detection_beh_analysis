@@ -5,6 +5,7 @@ import os
 from os.path import join
 from functools import lru_cache
 from copy import copy
+import math
 
 
 def findfiles(startdir,filetype,datadict,animals=None,dates=None):
@@ -38,9 +39,11 @@ def correctdrift(timeseries, syncseries1, syncseries2) -> pd.Series:
     timeseries0 = timeseries.iloc[0]
     syncdiff = syncseries1 - syncseries2  # series with diff between clocks
     drift_scalar = (syncdiff.iloc[-1] - syncdiff.iloc[0])/(syncseries1.iloc[-1]-syncseries1.iloc[0])
+    if math.isnan(drift_scalar):
+        drift_scalar = 1
     print(f' first {syncdiff.iloc[0]} last{syncdiff.iloc[-1]}, scalar {drift_scalar}')
-    corrected_ts = timeseries.apply(lambda t: (t-timeseries0)*drift_scalar+t)
-
+    # corrected_ts = timeseries.apply(lambda t: timeseries0+(t*drift_scalar))
+    corrected_ts = timeseries
     return corrected_ts
 
 

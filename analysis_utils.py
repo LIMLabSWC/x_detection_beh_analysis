@@ -1,3 +1,4 @@
+from psychophysicsUtils import pupilDataClass
 import pandas as pd
 import numpy as np
 import os
@@ -26,7 +27,9 @@ def merge_sessions(datadir,animal_list,filestr_cond, date_range, datestr_format=
         if filestr_cond == 'SummaryData' or filestr_cond == 'params':
             for file in files:
                 if file.find(filestr_cond) != -1:
-                    session_date = file[-11:-5]
+                    filename_parts = file.split('_')
+                    animal_name = filename_parts[0]
+                    session_date = filename_parts[2][:6]
                     loaded_file = pd.read_csv(os.path.join(root,file), delimiter=',')
                     if loaded_file['Name'][0] in animal_list \
                             and datetime.strptime(date_range[0], '%d/%m/%Y') <= datetime.strptime(session_date,datestr_format)\
@@ -37,8 +40,9 @@ def merge_sessions(datadir,animal_list,filestr_cond, date_range, datestr_format=
         elif filestr_cond == 'TrialData':
             for file in files:
                 if file.find(filestr_cond) != -1:
-                    animal_name = file[0:4]
-                    session_date = file[-11:-5]
+                    filename_parts = file.split('_')
+                    animal_name = filename_parts[0]
+                    session_date = filename_parts[2][:6]
                     if animal_name in animal_list \
                             and datetime.strptime(date_range[0], '%d/%m/%Y') <= datetime.strptime(session_date,datestr_format)\
                             <= datetime.strptime(date_range[1], '%d/%m/%Y'):
@@ -105,13 +109,16 @@ def filter_df(data_df, filters):
 
     # subset normals
     unique_norms = sorted(data_df[data_df['Pattern_Type']==0]['PatternID'].unique())
-    normtrain = [np.array([15,17,19,20]),np.array([20,22,24,25])]  
+    normtrain_arr = [np.array([15,17,19,20]),np.array([20,22,24,25])]
+
+    normtrain = []
     normtest = []
     for pat in unique_norms:
         _parray = np.array(pat.split(';')).astype(int)
-        if _parray not in normtrain:
-            normtest.append(_parray)
-
+        if np.all(normtrain_arr != _parray):
+            normtest.append(pat)
+        else:
+            normtrain.append(pat)
 
     fildict = {
         'a0': ['Trial_Outcome', 0],
@@ -337,7 +344,7 @@ def align2eventScalar(df,pupilsize,pupiltimes, pupiloutliers,beh, dur, rate, fil
 
     pupiltrace = pd.Series(pupilsize,index=pupiltimes)
     outlierstrace = pd.Series(pupiloutliers,index=pupiltimes)
-    filtered_df = utils.filter_df(df,filters)
+    filtered_df = filter_df(df,filters)
     t_len = int((abs(dur[0]) + abs(dur[1])) / rate)+1
     dur = np.array(dur)
     # print(t_len)
@@ -364,7 +371,7 @@ def align2eventScalar(df,pupilsize,pupiltimes, pupiloutliers,beh, dur, rate, fil
         else:
             # print('diff',eventpupil.loc[eventtime - 1-eventshift]-eventpupil.loc[eventtime + 1-eventshift])
             if baseline:
-                baseline_dur = 1.0
+                baseline_dur = .5
                 baseline_mean = np.nanmean(eventpupil.loc[eventtime - (baseline_dur-eventshift):
                                                eventtime + eventshift])
                 eventpupil = eventpupil - baseline_mean
@@ -434,7 +441,7 @@ def getpatterntraces(data, patterntypes,beh,dur, rate, eventshifts=None,baseline
         tone_aligned_pattern = align2eventScalar(td2use,pupil2use,times2use,
                                                  outs2use,beh,
                                                  dur,rate,patternfilter,
-                                                 outlierthresh=0.5,stdthresh=4,
+                                                 outlierthresh=0.9,stdthresh=4,
                                                  eventshift=eventshifts[i],baseline=baseline,subset=subset)
         if subset is not None:
             firsts.append(tone_aligned_pattern[0])
@@ -496,38 +503,6 @@ def plotvar(data,plot,timeseries):
     plot[1].fill_between(timeseries, data.mean(axis=0)+ci95,data.mean(axis=0)-ci95,alpha=0.1)
 
 
-def get_traces(df2use,datadict,dict2use,align_col,ptypes,_dur,_rate,labels,filters,plt_trace=None,align_name=None):
-    all_normals = []
-    # (df, pupilsize, pupiltimes, pupiloutliers, beh, dur, rate, filters
-    #  =('4pupil', 'b1', 'c1'), baseline = False, eventshift = 0,
-    #                                                      outlierthresh = 0.9, stdthresh = 3, subset = None)
-    if align_name is None:
-        align_name = f'Aligned to {align_col}'
-
-    for ax_ix, session in enumerate(datadict.keys()):
-        sess_ix = session.split('_')
-        df2use.loc[sess_ix[0],sess_ix[1]]
-        alignedtraces = align2eventScalar(df2use.loc[sess_ix[0],sess_ix[1]],datadict[session].pupilDiams, datadict[session].times,datadict[session].isOutlier,
-                                          align_col,_dur,_rate,filters,outlierthresh=0.9,stdthresh=5,baseline=True)
-        dict2use[session] = alignedtraces
-        all_normals.append(alignedtraces[0])
-        plot_eventaligned(alignedtraces, ptypes, _dur,_rate, align_name,
-                          (plt_trace[0],plt_trace[1][ax_ix]))
-        sess_plot = plot_eventaligned(alignedtraces, ptypes, _dur, _rate, 'ToneTime by pattern')
-        sess_plot[1].set_title(f'{labels[ax_ix]}: Pupil response to patterns',size=8)
-        sess_plot[1].set_xlabel('Time from pattern presentation (s)',size=6)
-        sess_plot[1].set_ylabel('Normalised pupil diameter',size=6)
-        sess_plot[1].set_ylim((-1,2))
-        sess_plot[0].set_size_inches(4,3, forward=True)
-        # sess_plot[0].tight_layout()
-        sess_plot[0].savefig(f'{labels[ax_ix]}_{align_name}.png',bbox_inches='tight')
-        plt_trace[ax_ix].set_ylim((-1,2))
-        # plt_trace[ax_ix].set_ylabel(f' {session} zscored pupil size')
-        plt_trace[ax_ix].set_title(f'Pupil Response to Stimulus {session}')
-    all_normals = np.concatenate(all_normals)
-    return all_normals,alignedtraces,sess_plot
-
-
 def align_wrapper(datadict,filters,align_beh, duration, samplerate, alignshifts=None, plotsess=False, plotlabels=None,
                   plottitle=None, xlabel=None,animal_labels=None,plotsave=False,coord=None):
     aligned_dict = {}
@@ -549,7 +524,7 @@ def align_wrapper(datadict,filters,align_beh, duration, samplerate, alignshifts=
             sess_plot[1].set_ylim((-1,2))
             sess_plot[0].set_size_inches(4,3, forward=True)
             if plotsave:
-                sess_plot[0].savefig(f'{animal_labels[ax_ix]}_{align_beh}.png', bbox_inches='tight')
+                sess_plot[0].savefig(f'{animal_labels[sessix]}_{align_beh}.png', bbox_inches='tight')
     aligned_df = pd.DataFrame.from_dict(aligned_dict,orient='index')
     for ptype in aligned_df.columns:
         for i, sess in enumerate(aligned_df.index):

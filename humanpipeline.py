@@ -10,14 +10,16 @@ from sklearn.linear_model import LinearRegression
 
 # for loading pkl
 data_pkl_name = None
-humans = [f'Human{i}' for i in range(2,16)]
-humandates = ['220118','220119','220120','220121','220124','220124','220125','220126','220127','220128']
+
+ids = [4,5,7,9,10,12,14,15]
+humans = [f'Human{i}' for i in ids]
+humandates = ['220118','220119','220120','220121','220124','220125','220126','220127','220128']
 animals = humans
 
 datadir = r'C:\bonsai\data\Hilde'
 dates = ['18/01/2022', '28/01/2022']
 
-today =  datetime.strftime(datetime.now(),'%y%m%d')
+today = datetime.strftime(datetime.now(),'%y%m%d')
 figdir = os.path.join(os.getcwd(),'figures',today)
 if not os.path.isdir(figdir):
     os.mkdir(figdir)
@@ -37,20 +39,20 @@ for col in trial_data.keys():
 
 # set up pupil data class for mice. value for each key is object with data 1 session
 dates = humandates
-samplerate = round(1/60,3)
-data = {}
+samplerate = round(1/100,3)
 
 # start of pipeline
-# data_pkl_name = r'pickles\all_withxy.pkl'
+data_pkl_name = r'pickles\human_nofilt.pkl'
 
 plabs = True
-if data_pkl_name is None:
+data = {}
+if data_pkl_name is None or os.path.exists(data_pkl_name) is False:
     for animal in animals:
         for date in dates:
             name = f'{animal}_{date}'
             try:
                 if plabs:
-                    animal_pupil = pd.read_csv(f'W:\\humanpsychophysics\\HumanXDetection\\Data\\analysed\\{animal}_{date}_pupildata.csv')
+                    animal_pupil = pd.read_csv(f'W :\\humanpsychophysics\\HumanXDetection\\Data\\analysed\\{animal}_{date}_pupildata.csv')
                 else:
                     animal_pupil = pd.read_csv(f'W:\\mouse_pupillometry\\analysed\\{animal}_{date}_pupildata_hypcffit.csv', skiprows=2)
                     animal_pupil = animal_pupil.rename(columns={'Unnamed: 25': 'frametime', 'Unnamed: 26': 'diameter','Unnamed: 27':'xcyc'})
@@ -62,29 +64,34 @@ if data_pkl_name is None:
                 data[name].rawTimes = np.array(animal_pupil['scalar'])
 
                 data[name].uniformSample(samplerate)
-                data[name].removeOutliers(n_speed=4, n_size=5)
-                data[name].interpolate(gapExtension=0.05)
-                data[name].frequencyFilter(lowF=0.1, lowFwidth=0.01, highF=3, highFwidth=0.5,do_highpass=False)
+                data[name].removeOutliers(n_speed=4, n_size=4)
+                data[name].interpolate(gapExtension=0.1)
+                # data[name].frequencyFilter(lowF=0.1, lowFwidth=0.01, highF=3, highFwidth=0.5,do_highpass=False)
 
                 data[name].zScore()
-
                 try:
                     animal_pupil['xcyc']
+                    interpol_xy = True
                 except KeyError:
                     animal_pupil['xcyc'] = np.full_like(animal_pupil['frametime'],'"0, 0"')
+                    interpol_xy = False
 
-                _rawxcyc = pd.DataFrame(animal_pupil['xcyc'].apply(lambda e: e[1:-1].split(',')))
-                data[name].rawxcyc = pd.DataFrame(_rawxcyc['xcyc'].tolist(), columns=['x', 'y'])
-                # data[name].rawxcyc = pd.DataFrame(data[name].rawxcyc)
-                for xycol in data[name].rawxcyc.columns:
-                    _uni = \
-                    uniformSample(np.array(data[name].rawxcyc[xycol]).astype(float), data[name].rawTimes, samplerate)[0]
-                    _xyouts, _xyoutsbool = removeOutliers(_uni, data[name].times, n_speed=4, n_size=5)
-                    _inter = interpolateArray(_xyouts, data[name].times, 0.05)[0]
-                    if xycol == 'x':
-                        data[name].xc = zScore(frequencyFilter(_inter, data[name].times, 0.1, 0.01))
-                    else:
-                        data[name].yc = zScore(frequencyFilter(_inter, data[name].times, 0.1, 0.01))
+                if interpol_xy:
+                    _rawxcyc = pd.DataFrame(animal_pupil['xcyc'].apply(lambda e: e[1:-1].split(',')))
+                    data[name].rawxcyc = pd.DataFrame(_rawxcyc['xcyc'].tolist(), columns=['x', 'y'])
+                    # data[name].rawxcyc = pd.DataFrame(data[name].rawxcyc)
+                    for xycol in data[name].rawxcyc.columns:
+                        _uni = \
+                        uniformSample(np.array(data[name].rawxcyc[xycol]).astype(float), data[name].rawTimes, samplerate)[0]
+                        _xyouts, _xyoutsbool = removeOutliers(_uni, data[name].times, n_speed=4, n_size=5)
+                        _inter = interpolateArray(_xyouts, data[name].times, 0.05)[0]
+                        if xycol == 'x':
+                            data[name].xc = zScore(frequencyFilter(_inter, data[name].times, 0.1, 0.01))
+                        else:
+                            data[name].yc = zScore(frequencyFilter(_inter, data[name].times, 0.1, 0.01))
+                else:
+                    data[name].xc = np.full_like(animal_pupil['frametime'],0)
+                    data[name].yc = np.full_like(animal_pupil['frametime'],0)
 
                 session_TD = trial_data.loc[animal, date]
                 for col in session_TD.keys():
@@ -95,6 +102,9 @@ if data_pkl_name is None:
                 data[name].plot()
             except FileNotFoundError:
                 pass
+        if data_pkl_name is not None:
+            with open(data_pkl_name,'wb') as pklfile:
+                pickle.dump(data,pklfile)
 else:
     with open(data_pkl_name,'rb') as f:
         data = pickle.load(f)
@@ -103,8 +113,11 @@ duration = [-1,2]
 
 # normal vs viol
 
-tonealigned_viols, tonealigned_viols_df  = align_wrapper(data,[['d0','4pupil'], ['d!0','4pupil']],'ToneTime_scalar',
-                                                         duration,samplerate,alignshifts=[.5,.5])
+tonealigned_viols, tonealigned_viols_df = align_wrapper(data,[['d0'], ['d!0']],'RewardTone_Time_scalar',
+                                                        duration,samplerate,alignshifts=[0,0],
+                                                        plotlabels=['Normal', 'Deviant'], plottitle='Violation',
+                                                        xlabel='Time from violation', animal_labels=animals,
+                                                        plotsess=True)
 all_normals = tonealigned_viols[0]
 tonealigned_viols_df.columns = ['Normal', 'Deviant']
 tonealigned_viols_fig, tonealigned_viols_ax = plot_eventaligned(tonealigned_viols,['Normal', 'Deviant'],
@@ -157,7 +170,7 @@ first_last_plot[0].savefig(os.path.join(figdir,'firstlast_normdev_va.png'),bbox_
 dev_traces = {}
 dev_traces_list = []
 
-devsubset_TA_viols, df_devTA_traces = align_wrapper(data,[['devord','4pupil','d!0'], ['devrep','4pupil','d!0']],
+devsubset_TA_viols, df_devTA_traces = align_wrapper(data,[['devord','d!0'], ['devrep','d!0']],
                                                   'ToneTime_scalar',duration,samplerate,alignshifts=[.5,.5,.75,.5])
 df_devTA_traces.columns = ['Bad Order', 'Repeated']
 devsubset_fig, devsubset_ax = plot_eventaligned(devsubset_TA_viols,df_devTA_traces.columns,duration,samplerate,
@@ -168,7 +181,7 @@ devsubset_ax.set_xlabel('Time from violation (s)')
 devsubset_fig.set_size_inches(4,3)
 
 
-violaligned_traces,violaligned_df = align_wrapper(data,[['d0','4pupil'], ['d1','4pupil'],['d2','4pupil'],['d3','4pupil']],
+violaligned_traces,violaligned_df = align_wrapper(data,[['d0'], ['d1'],['d2'],['d3']],
                                                   'ToneTime_scalar',duration,samplerate,alignshifts=[.5,.5,.75,.5])
 violaligned_df.columns = ['Normal','AB_D','ABC_','AB__']
 violaligned_fig,violaligned_ax = plot_eventaligned(violaligned_traces,violaligned_df.columns,duration,samplerate, 'Violation Time by pattern')
@@ -184,7 +197,7 @@ all_devsubsetplot = plot_eventaligned(dev_traces_list,['Bad Order', 'Repeated'],
 all_devsubsetplot[1].set_ylim(-.5,.5)
 all_devsubsetplot[0].set_size_inches(4,3)
 
-violaligned_devsubset_traces,violaligned_devsubset_df = align_wrapper(data,[['d0','4pupil'], ['d1','4pupil']],
+violaligned_devsubset_traces,violaligned_devsubset_df = align_wrapper(data,[['d0'], ['d1']],
                                                   'ToneTime_scalar',duration,samplerate,alignshifts=[.5,.5])
 violaligned_devsubset_df.columns = ['Normal','AB_D']
 violaligned_devsubset_fig,violaligned_devsubset_ax = plot_eventaligned(violaligned_devsubset_traces,  # [0],violaligned_devsubset_traces[0]+violaligned_devsubset_traces[1]]
@@ -203,7 +216,7 @@ rewardtone_ax.axvline(0,ls='--',color='k')
 rewardtone_fig.set_size_inches(4,3)
 
 # look at descending
-dev_traj_traces, dev_traj_df = align_wrapper(data,[['d0','4pupil'],['d!0','devassc','4pupil'], ['d!0','devdesc','4pupil']]
+dev_traj_traces, dev_traj_df = align_wrapper(data,[['d0'],['d!0','devassc'], ['d!0','devdesc']]
                                              ,'ToneTime_scalar',duration, samplerate,alignshifts=[.5,.5,.5])
 dev_traj_df.columns = ['Normal','Deviant Assc','Deviant Dessc']
 dev_traj_fig,dev_traj_ax = plot_eventaligned(dev_traj_traces,dev_traj_df.columns,duration,samplerate,
@@ -216,13 +229,25 @@ dev_traj_fig.set_size_inches(4,3)
 dev_traj_fig.savefig(os.path.join(figdir,'assc_desc.png'),bbox_inches='tight')
 
 # xy position of the eye norm dev
-for i in ['x','y']:
-    tonealigned_viols_xy, tonealigned_viols_xy_df  = align_wrapper(data,[['d0','4pupil'], ['d!0','4pupil']],'ToneTime_scalar',
-                                                             duration,samplerate,alignshifts=[.5,.5],coord=i)
-    tonealigned_viols_xy_df.columns = ['Normal', 'Deviant']
-    tonealigned_viols_xy_fig, tonealigned_viols_xy_ax = plot_eventaligned(tonealigned_viols_xy,['Normal', 'Deviant'],
-                                                                    duration,samplerate, 'Violation')
-    tonealigned_viols_xy_ax.set_ylim((-.5,.5))
-    tonealigned_viols_xy_ax.set_ylabel(f'{i} position')
-    tonealigned_viols_xy_ax.axvline(0,ls='--',color='k')
-    tonealigned_viols_xy_fig.set_size_inches(4,3)
+# for i in ['x','y']:
+#     tonealigned_viols_xy, tonealigned_viols_xy_df  = align_wrapper(data,[['d0''], ['d!0'']],'ToneTime_scalar',
+#                                                              duration,samplerate,alignshifts=[.5,.5],coord=i)
+#     tonealigned_viols_xy_df.columns = ['Normal', 'Deviant']
+#     tonealigned_viols_xy_fig, tonealigned_viols_xy_ax = plot_eventaligned(tonealigned_viols_xy,['Normal', 'Deviant'],
+#                                                                     duration,samplerate, 'Violation')
+#     tonealigned_viols_xy_ax.set_ylim((-.5,.5))
+#     tonealigned_viols_xy_ax.set_ylabel(f'{i} position')
+#     tonealigned_viols_xy_ax.axvline(0,ls='--',color='k')
+#     tonealigned_viols_xy_fig.set_size_inches(4,3)
+
+# compare normals
+normcomp_traces, normcomp_df = align_wrapper(data,[['d0'],['normtrain'],['normtest'],['d2']]
+                                             ,'ToneTime_scalar',duration, samplerate,alignshifts=[.5,.5,.5,.5])
+normcomp_df.columns = ['All Normal','Normal: Train Phase','Normal: Test Phase','Deviants']
+normcomp_fig, normcomp_ax = plot_eventaligned(normcomp_traces,normcomp_df.columns, duration,samplerate,
+                                              'Normal Patterns comparison')
+normcomp_ax.set_ylim(-.5,.5)
+normcomp_ax.set_ylabel('zscored pupil size')
+normcomp_ax.axvline(0,ls='--',color='k')
+normcomp_fig.set_size_inches(4,3)
+normcomp_fig.savefig(os.path.join(figdir,'normcomp.png'),bbox_inches='tight')
