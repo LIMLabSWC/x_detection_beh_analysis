@@ -11,13 +11,14 @@ from sklearn.linear_model import LinearRegression
 # for loading pkl
 data_pkl_name = None
 
-ids = [4,5,7,9,10,12,14,15]
+# ids = [4,5,7,9,10,12,14,15]
+ids = [17,18]
 humans = [f'Human{i}' for i in ids]
-humandates = ['220118','220119','220120','220121','220124','220125','220126','220127','220128']
+humandates = ['220118','220119','220120','220121','220124','220125','220126','220127','220128','220208','220209','220210']
 animals = humans
 
 datadir = r'C:\bonsai\data\Hilde'
-dates = ['18/01/2022', '28/01/2022']
+dates = ['08/02/2022', '10/02/2022']
 
 today = datetime.strftime(datetime.now(),'%y%m%d')
 figdir = os.path.join(os.getcwd(),'figures',today)
@@ -42,7 +43,7 @@ dates = humandates
 samplerate = round(1/100,3)
 
 # start of pipeline
-data_pkl_name = r'pickles\human_nofilt.pkl'
+data_pkl_name = r'pickles\human_lessstims_nofilt.pkl'
 
 plabs = True
 data = {}
@@ -50,9 +51,11 @@ if data_pkl_name is None or os.path.exists(data_pkl_name) is False:
     for animal in animals:
         for date in dates:
             name = f'{animal}_{date}'
+            # if os.path.exists(f'W :\\humanpsychophysics\\HumanXDetection\\Data\\analysed\\{animal}_{date}_pupildata.csv'):
             try:
                 if plabs:
-                    animal_pupil = pd.read_csv(f'W :\\humanpsychophysics\\HumanXDetection\\Data\\analysed\\{animal}_{date}_pupildata.csv')
+                    plabs_dir = r'W:\humanpsychophysics\HumanXDetection\Data\analysed'
+                    animal_pupil = pd.read_csv(os.path.join(plabs_dir,f'{animal}_{date}_pupildata.csv'))
                 else:
                     animal_pupil = pd.read_csv(f'W:\\mouse_pupillometry\\analysed\\{animal}_{date}_pupildata_hypcffit.csv', skiprows=2)
                     animal_pupil = animal_pupil.rename(columns={'Unnamed: 25': 'frametime', 'Unnamed: 26': 'diameter','Unnamed: 27':'xcyc'})
@@ -251,3 +254,20 @@ normcomp_ax.set_ylabel('zscored pupil size')
 normcomp_ax.axvline(0,ls='--',color='k')
 normcomp_fig.set_size_inches(4,3)
 normcomp_fig.savefig(os.path.join(figdir,'normcomp.png'),bbox_inches='tight')
+
+# Hilde stuff:
+# mean_normals = tonealigned_viols[0].mean(axis=0)  # mean of normal trace
+mean_normals = tonealigned_viols[0][-1]
+max_diffs_list = []
+eval_window = np.array([0,1]) + (-duration[0])  # in seconds
+eval_window_ts = (eval_window/samplerate).astype(int)  # as index number
+
+for r,trace in enumerate(tonealigned_viols[0]):
+    trial_dev_trace = tonealigned_viols[0][r,:]
+    diff_trace = (mean_normals[eval_window_ts[0]:eval_window_ts[1]]-trial_dev_trace[eval_window_ts[0]:eval_window_ts[1]]) # get diff using a metric
+    max_diffs_list.append([diff_trace.max(),diff_trace.sum(),np.where(diff_trace==diff_trace.max())[0][0]*samplerate])
+max_diffs_arr = np.array(max_diffs_list)
+# plt.plot(max_diffs_arr[:,0])
+plt.plot(max_diffs_arr[:,1])
+
+
