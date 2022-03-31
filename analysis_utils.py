@@ -10,7 +10,7 @@ import pandas as pd
 from sklearn.linear_model import LinearRegression
 
 
-def merge_sessions(datadir,animal_list,filestr_cond, date_range, datestr_format='%y%m%d'):
+def merge_sessions(datadir,animal_list,filestr_cond, date_range, datestr_format='%y%m%d') -> list:
     """
     Function to merge csv files for given conditon
     :param datadir: str. starting point for datafiles
@@ -551,3 +551,23 @@ def findfiles(startdir,filetype,datadict,animals=None,dates=None):
                         if _date not in datadict[_animal].keys():
                             datadict[_animal][_date] = dict()
                         datadict[_animal][_date][f'{filetype}file'] = os.path.join(root, file)
+
+
+def get_diff_traces(arr, basetrace, window, metric='max'):
+    diff_arr = arr - basetrace
+    diff_arr_window = diff_arr[window[0]:window[1]]
+    max_diffs_arr = np.apply_along_axis(lambda r: np.where(r == r.max())[0][0], 1, diff_arr_window)
+
+    if metric == 'max':
+        return diff_arr_window.max(), max_diffs_arr
+    elif metric == 'integral':
+        return diff_arr_window.abs().sum(), max_diffs_arr
+    else:
+        print('Invalid metric used')
+        return None, None
+
+
+def add_date_ticks(plotax, date_list):
+    dates_unique = pd.Series(date_list).unique()
+    plotax.set_xticks(np.arange(len(dates_unique)))
+    plotax.set_xticklabels(list(dates_unique), rotation=40, ha='center', size=9)
