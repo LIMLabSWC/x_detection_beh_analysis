@@ -13,6 +13,9 @@ from math import floor,ceil
 
 
 class TDAnalysis:
+    """
+    Class for holding trialdata functions, dataframes, and plots
+    """
 
     def __init__(self, tdatadir, animal_list, daterange,):
         self.trial_data = utils.merge_sessions(tdatadir,animal_list,'TrialData',daterange)
@@ -35,7 +38,7 @@ class TDAnalysis:
                 statnames = ['Trials Done', 'NonViol Trials', 'Early Rate', 'Error Rate']
                 data_day = utils.filter_df(self.trial_data.loc[animal, date], filters)
                 trials_done_day = data_day.shape[0]
-                correct_trials = utils.filter_df(data_day, ['a3']).shape[0]
+                correct_trials = utils.filter_df(data_day, ['a1']).shape[0]
                 try:
                     early_rate = utils.filter_df(data_day, ['a2']).shape[0] / trials_done_day
                 except ZeroDivisionError:

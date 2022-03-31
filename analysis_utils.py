@@ -65,7 +65,7 @@ def merge_sessions(datadir,animal_list,filestr_cond, date_range, datestr_format=
     return file_df
 
 
-def get_fractioncorrect(data_df, stimlen_range, animal_list, df_filters=('a3','c1')):
+def get_fractioncorrect(data_df, stimlen_range, animal_list, df_filters=('a3','b1')) -> list:
     performance = []
     ntrial_list = []
     for animal in animal_list:
@@ -84,7 +84,15 @@ def get_fractioncorrect(data_df, stimlen_range, animal_list, df_filters=('a3','c
     return performance, ntrial_list
 
 
-def filter_df(data_df, filters):
+def filter_df(data_df, filters) -> pd.DataFrame:
+    """
+    Create df subset by recursive filtering of dataframe
+    :param data_df: pd.Dataframe data frame to filter
+    :param filters: str[] list of fildict keys.
+            a(123) trialoutcome, b(01) warmup, c(01) tone poistion, d(0123!0) pattern type, e(0!0) tone played,
+            see filtdict for full description
+    :return: final filtered dataframe
+    """
 
     dev_nonorder = [] 
     dev_repeat = []
@@ -206,8 +214,24 @@ def plot_performance(data_df, stims, animal_list, date_range, marker_colors):
     return perfomance_plot,perfomance_ax,fractioncorrect
 
 
-def plot_metric_v_stimdur(data_df, stims, feature,value, animal_list, date_range, marker_colors, df_filters=None,
+def plot_metric_v_stimdur(data_df, feature,value, animal_list, date_range, marker_colors, df_filters=None,
                           plot_title=None, ytitle=None, legend_labels = None, plottype=None):
+
+    """
+    Function to plot a metric(y axis) for each stimulus length (x xis)
+    :param data_df: pd.Dataframe trial data frame
+    :param feature: str column name of metric in df
+    :param value: any value that row in column should be e.g. Trial_outcome == 1
+    :param animal_list: str[]
+    :param date_range: dd/mm/yyyy[] only need for defualt axis title
+    :param marker_colors: float[] list of plot colours for each animal
+    :param df_filters: str[] optional extra df filters. see filter_df()
+    :param plot_title: str
+    :param ytitle: str
+    :param legend_labels: str[]
+    :param plottype: str  default = line graph. optional 'scatter' option will perform scatter plot'
+    :return:
+    """
 
     if date_range[1] == 'now':
         date_range[1] = datetime.strftime(datetime.now(),'%d/%m/%Y')
@@ -216,6 +240,7 @@ def plot_metric_v_stimdur(data_df, stims, feature,value, animal_list, date_range
     performance = []
     ntrial_list = []
 
+    stims = filter_df(data_df, ['b1'])['Stim1_Duration'].unique()
     for animal in animal_list:
         stim_performance = []
         animal_df = data_df.loc[animal]
@@ -265,7 +290,7 @@ def plot_metric_v_stimdur(data_df, stims, feature,value, animal_list, date_range
 
 
 def plot_metricrate_trialnun(data_df, feature, value,
-                         filters=('b1',), plot_title=None, ytitle=None, regressionline =False):
+                             filters=('b1',), plot_title=None, ytitle=None, regressionline =False):
     # init plots
     trialnum_vs_featurerate_fig, trialnum_vs_featurerate_ax = plt.subplots(1)
 
@@ -536,6 +561,15 @@ def align_wrapper(datadict,filters,align_beh, duration, samplerate, alignshifts=
     return aligned_list,aligned_df
 
 def findfiles(startdir,filetype,datadict,animals=None,dates=None):
+    """
+    Adds file paths strings to given dictionary. Will walk through subfolders and add fullpaths of matching files
+    :param startdir: str dir to start os.walk()
+    :param filetype: str to match
+    :param datadict: dict for adding full path to
+    :param animals: str[] optional list animals
+    :param dates: str[] optional list dates
+    :return: nothing
+    """
     for root, folder, files in os.walk(startdir):
         for file in files:
             if file.find(filetype) != -1:

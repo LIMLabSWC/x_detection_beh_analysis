@@ -127,18 +127,18 @@ fig.legend(by_label.values(), by_label.keys())
 
 
 plots = utils.plot_performance(trial_data, stimdurs, animals, dates, plot_colours)
-plot_early = utils.plot_metric_v_stimdur(trial_data,stimdurs,'Trial_Outcome',-1,animals,dates,
+plot_early = utils.plot_metric_v_stimdur(trial_data,'Trial_Outcome',-1,animals,dates,
                                          plot_colours,['b1'], ytitle= 'Early rate',
                                          legend_labels = anon_animals)
-plot_error_notones = utils.plot_metric_v_stimdur(trial_data,stimdurs,'Trial_Outcome',0,animals,dates,
+plot_error_notones = utils.plot_metric_v_stimdur(trial_data,'Trial_Outcome',0,animals,dates,
                                                  plot_colours,['b1','a3','e=0'],'Error rate without Tones', 'Error Rate no tones',
                                                  legend_labels = anon_animals)
 plot_error_notones[1].set_title('Miss rate for non pattern played trials')
-plot_error_tones = utils.plot_metric_v_stimdur(trial_data,stimdurs,'Trial_Outcome',0,animals,dates,
+plot_error_tones = utils.plot_metric_v_stimdur(trial_data,'Trial_Outcome',0,animals,dates,
                                                plot_colours,['b1','a3','e!0'], 'Error rate with Tones', 'Error Rate Tones',
                                                legend_labels = anon_animals)
 plot_error_tones[1].set_title('Miss rate for pattern played trials')
-plot_error = utils.plot_metric_v_stimdur(trial_data,stimdurs,'Trial_Outcome', 0,animals,dates,
+plot_error = utils.plot_metric_v_stimdur(trial_data,'Trial_Outcome', 0,animals,dates,
                                          plot_colours,['b1','a3'],'Miss rate all trials', 'Error Rate',
                                          legend_labels = anon_animals)
 plot_error[1].set_title('Miss rate all trials')
