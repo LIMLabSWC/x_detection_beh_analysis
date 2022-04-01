@@ -604,4 +604,4 @@ def get_diff_traces(arr, basetrace, window, metric='max'):
 def add_date_ticks(plotax, date_list):
     dates_unique = pd.Series(date_list).unique()
     plotax.set_xticks(np.arange(len(dates_unique)))
-    plotax.set_xticklabels(list(dates_unique), rotation=40, ha='center', size=9)
+    plotax.set_xticklabels(list(dates_unique), rotation=40, ha='center', size=3)

@@ -20,6 +20,10 @@ class TDAnalysis:
     def __init__(self, tdatadir, animal_list, daterange,):
         self.trial_data = utils.merge_sessions(tdatadir,animal_list,'TrialData',daterange)
         self.trial_data = pd.concat(self.trial_data,sort=False,axis=0)
+        try:
+            self.trial_data = self.trial_data.drop(columns=['RewardCross_Time','WhiteCross_Time'])
+        except KeyError:
+            pass
         self.animals = animal_list
         self.anon_animals = [f'Animal {i}' for i in range(len(self.animals))]  # give animals anon labels
         self.dates = self.trial_data.loc[self.animals].index.to_frame()['Date'].unique()
@@ -59,7 +63,7 @@ class TDAnalysis:
                 for id, d in enumerate(stats_dict[animal].keys()):
                     for f, feature in enumerate(stats_dict[animal][d]):
                         ax[f].scatter(id, stats_dict[animal][d][feature], marker='o', color=plot_colours[i],
-                                      label=animal)
+                                      label=animal, s=2)
                         if i == 0:
                             ax[f].set_ylabel(f'{feature}')
                             # ax[f].set_xlabel('Session Number')
@@ -67,6 +71,13 @@ class TDAnalysis:
             # for axis in ax:
             #     by_label = OrderedDict(zip(labels, handles))
             #     # axis.legend(by_label.values(), by_label.keys())
+
+
+            for axis in ax:
+                xmin, xmax = axis.get_xlim()
+                ymin, ymax = axis.get_ylim()
+                axis.set_xlim(xmin - 0.01, xmax+0.01)
+                axis.set_ylim(ymin - 0.1, ymax+ymax*.1)
 
             by_label = OrderedDict(zip(labels, handles))
             fig.legend(by_label.values(), by_label.keys())
@@ -79,6 +90,9 @@ class TDAnalysis:
 
 
 if __name__ == '__main__':
+    plt.rcParams["figure.figsize"] = [4.00, 3.00]
+    # plt.rcParams["figure.autolayout"] = True
+
     datadir = r'C:\bonsai\data'
     animals = [
                 'DO45',
@@ -88,7 +102,7 @@ if __name__ == '__main__':
                ]
 
     dates = ['17/03/2022', 'now']  # start/end date for analysis
-    plot_colours = plt.cm.jet(np.linspace(0,1,len(animals)))  # generate list of col ids for each animal
+    plot_colours = plt.cm.magma(np.linspace(0,1,len(animals)))  # generate list of col ids for each animal
     td_obj = TDAnalysis(datadir,animals,dates)
     td_obj.day2day = td_obj.beh_daily(True)
 
