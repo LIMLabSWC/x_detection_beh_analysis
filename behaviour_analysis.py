@@ -87,7 +87,7 @@ if __name__ == '__main__':
                 'DO48'
                ]
 
-    dates = ['17/03/2022', '30/10/2022']  # start/end date for analysis
+    dates = ['17/03/2022', 'now']  # start/end date for analysis
     plot_colours = plt.cm.jet(np.linspace(0,1,len(animals)))  # generate list of col ids for each animal
     td_obj = TDAnalysis(datadir,animals,dates)
     td_obj.day2day = td_obj.beh_daily(True)

@@ -218,7 +218,7 @@ def plot_metric_v_stimdur(data_df, feature,value, animal_list, date_range, marke
                           plot_title=None, ytitle=None, legend_labels = None, plottype=None):
 
     """
-    Function to plot a metric(y axis) for each stimulus length (x xis)
+    Function to plot a metric(y axis) for each stimulus length (x axis)
     :param data_df: pd.Dataframe trial data frame
     :param feature: str column name of metric in df
     :param value: any value that row in column should be e.g. Trial_outcome == 1
