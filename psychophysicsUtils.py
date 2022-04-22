@@ -13,33 +13,38 @@ import matplotlib.pyplot as plt
 import matplotlib.pyplot as plt 
 import matplotlib 
 from matplotlib import cm
-from matplotlib import rcParams
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-from cycler import cycler
+# from matplotlib import rcParams
+# from mpl_toolkits.axes_grid1 import make_axes_locatable
+# from cycler import cycler
 import pandas as pd
+from copy import copy
+import scipy.io.wavfile
+import scipy.signal
+from copy import copy
 
-plt.style.use("seaborn")
-rcParams['figure.dpi']= 300
-rcParams['axes.labelsize']=5
-rcParams['axes.labelpad']=2
-rcParams['axes.titlepad']=3
-rcParams['axes.titlesize']=5
-rcParams['axes.xmargin']=0
-rcParams['axes.ymargin']=0
-rcParams['xtick.labelsize']=4
-rcParams['ytick.labelsize']=4
-rcParams['grid.linewidth']=0.5
-rcParams['legend.fontsize']=4
-rcParams['lines.linewidth']=0.5
-rcParams['xtick.major.pad']=2
-rcParams['xtick.minor.pad']=2
-rcParams['ytick.major.pad']=2
-rcParams['ytick.minor.pad']=2
-rcParams['xtick.color']='grey'
-rcParams['ytick.color']='grey'
-rcParams['figure.titlesize']='medium'
-rcParams['axes.prop_cycle']=cycler('color', ['#66c2a5','#fc8d62','#8da0cb','#e78ac3','#a6d854','#ffd92f','#e5c494','#b3b3b3'])
 
+# plt.style.use("seaborn")
+# rcParams['figure.dpi']= 300
+# rcParams['axes.labelsize']=5
+# rcParams['axes.labelpad']=2
+# rcParams['axes.titlepad']=3
+# rcParams['axes.titlesize']=5
+# rcParams['axes.xmargin']=0
+# rcParams['axes.ymargin']=0
+# rcParams['xtick.labelsize']=4
+# rcParams['ytick.labelsize']=4
+# rcParams['grid.linewidth']=0.5
+# rcParams['legend.fontsize']=4
+# rcParams['lines.linewidth']=0.5
+# rcParams['xtick.major.pad']=2
+# rcParams['xtick.minor.pad']=2
+# rcParams['ytick.major.pad']=2
+# rcParams['ytick.minor.pad']=2
+# rcParams['xtick.color']='grey'
+# rcParams['ytick.color']='grey'
+# rcParams['figure.titlesize']='medium'
+# rcParams['axes.prop_cycle']=cycler('color', ['#66c2a5','#fc8d62','#8da0cb','#e78ac3','#a6d854','#ffd92f','#e5c494','#b3b3b3'])
+#
 
 
 """
@@ -59,6 +64,8 @@ Parameters:
 Returns 
 • time in seconds (float) 
 """
+
+
 def scalarTime(strTime): # strTime of form 'HH:MM:SS:msmsmsmsms.....'
 	hours = int(strTime[0:2])*60*60
 	minutes = int(strTime[3:5])*60
@@ -252,7 +259,7 @@ For this to be stable, however, it's better to increase the frequency, not decre
 Hence, ideally, new_dt < dt
 Basically, PupilLabs doesn't have a constant FPS which messes with later filtering etc. so this use linear interpolation to make it constant.
 """
-def uniformSample(dataArray, timeArray, new_dt = None, aligntimes = None, verbose = True): 
+def uniformSample(dataArray, timeArray, new_dt = None, aligntimes = None, verbose = True):
 	dt = get_dt(timeArray)
 
 	if verbose == True:
@@ -1287,3 +1294,119 @@ def funcZeroTest(mean,std,ntests=1000,plot=False): #a significance test to tell 
 	percentile = len(np.where(np.sort(np.array(logPs))<logPmean)[0]) / len(logPs)
 
 	return percentile
+
+
+def interpolatepupil(dataSeries, gapExtension = 0.2) ->pd.Series:
+
+	dt = pd.Series(dataSeries.index).diff().abs().mean()  # in timedelta
+	gap_dt = gapExtension/dt.total_seconds()  # in seconds, float
+	interpolatedDataArray = dataSeries.copy()
+	jump_dist = dt*gap_dt  # in dt
+
+	print("Interpolating missing values: ", end="")
+	# isInterpolated = np.zeros(len(dataSeries),dtype=bool)
+	i = pd.Series(dataSeries.index).iloc[0]
+
+	series_diff = (dataSeries == 0.0).diff()
+	no_data_starts = dataSeries[series_diff==1.0].copy()
+	no_data_ends = dataSeries[series_diff==-1.0].copy()
+
+	minidx = dataSeries.index[0]
+	maxidx = dataSeries.index[-1]
+
+	while True:
+		if i >= maxidx:
+			break
+
+		if ~np.isnan(dataSeries[i]): #the value exists and there is no problem
+			interpolatedDataArray[i] = dataSeries[i]
+			i += jump_dist
+
+		elif np.isnan(dataSeries[i]) :#do some interpolation
+
+			k = jump_dist
+			while True:
+				if i-k < minidx: #edge case where we fall off array
+					start, startidx = np.mean(dataSeries), minidx
+					break
+				elif i-k >= minidx:
+					if np.isnan(dataSeries[i-k]):
+						k += jump_dist #keep extending till you get non-zero val
+					elif ~np.isnan(dataSeries[i-k]):
+						start, startidx = dataSeries[i-k], i-k+dt
+						break
+
+			j = i
+			while True:
+				while True: #find 'end' of blink
+					if j >= maxidx:
+						j = maxidx
+						break
+					if np.isnan(dataSeries[j]):
+						j += jump_dist
+					elif ~np.isnan(dataSeries[j]):
+						j = j-jump_dist
+						break
+
+				if j+k >= maxidx: #edge case where we fall off array
+					end, endidx = np.mean(dataSeries), maxidx
+					break
+				elif j+k < maxidx:
+					if np.isnan(dataSeries[j+k]):
+						k += jump_dist #keep extending till you get non-zero val
+					elif ~np.isnan(dataSeries[j+k]):
+						end, endidx = dataSeries[j+k], j+k
+						break
+
+			interpolatedDataArray[startidx:endidx] = np.linspace(start,end,round(((endidx+dt)-startidx)/dt)).copy()
+			# isInterpolated[startidx:endidx] = np.ones(endidx-startidx,dtype=bool)
+
+			i=endidx+jump_dist
+
+	return interpolatedDataArray
+
+
+def removeouts(dataseries, n_speed=2.5, n_size=2.5, plotHist=False): #following Leys et al 2013
+	print("Removing speed outliers", end="")
+	size = dataseries
+	timeseries = pd.Series(dataseries.index)
+	absspeed = timeseries.diff().abs()
+	dt = absspeed.mean().total_seconds()
+	absSpeed = size.diff().abs()/dt
+
+	MAD_speed = np.nanmedian(np.abs(absSpeed - absSpeed.median()))
+	MAD_size = np.median(np.abs(size - size.median()))
+	threshold_speed_low = 0  # abs(absSpeed.median() - n_speed*MAD_speed)
+	threshold_size_low = size.median() - n_size*MAD_size
+	threshold_speed_high = absSpeed.median() + n_speed*MAD_speed
+	threshold_size_high = size.median() + n_size*MAD_size
+
+	# data = data * (absSpeed<threshold_speed_high)  #  * (absSpeed>=threshold_speed_low)
+	# print(" (%.2f%%) " %(100*(1-np.sum((absSpeed<threshold_speed_high) * (absSpeed>threshold_speed_low))/len(data))),end="")
+
+	size_speed_cond = np.array([
+								(size>threshold_size_low),
+								(size<threshold_size_high),
+								# (absSpeed<threshold_speed_high)
+								]).all(axis=0)
+	data=dataseries.where(size_speed_cond==True).copy()
+
+	if plotHist == True: #plots histograms and thresholds
+		fig, ax = plt.subplots(1,2)
+		ax[0].hist(np.log(absSpeed),bins=30)
+		ax[1].hist(size,bins=30)
+		ax[0].axvline(x=np.median(absSpeed),c='k')
+		ax[0].axvline(x=threshold_speed_low,c='k')
+		ax[0].axvline(x=threshold_speed_high,c='k')
+		ax[1].axvline(x=np.median(size),c='k')
+		ax[1].axvline(x=threshold_size_low,c='k')
+		ax[1].axvline(x=threshold_size_high,c='k')
+		ax[0].set_title("data")
+		ax[1].set_title("d data / dt ")
+	# isOutlier =np.invert((np.array([absSpeed<threshold_speed_high,size>threshold_size_low,size!=0])).all(axis=0))
+	isOutlier= np.invert(size_speed_cond)
+	print(f'proportion outliers = {np.sum(isOutlier==True)/isOutlier.shape[0]}')
+	print(f'min/max = {data.min()}/{data.max()}')
+	print(f'max possible:{threshold_size_high}')
+	return data, isOutlier
+

@@ -6,6 +6,7 @@ from os.path import join
 from functools import lru_cache
 from copy import copy
 import math
+import numpy as np
 
 
 def findfiles(startdir,filetype,datadict,animals=None,dates=None):
@@ -30,20 +31,24 @@ def findfiles(startdir,filetype,datadict,animals=None,dates=None):
 def correctdrift(timeseries, syncseries1, syncseries2) -> pd.Series:
     """
 
-    :param timeseries:
-    :param syncseries1:
-    :param syncseries2:
+    :param timeseries:  timeseries to be corrected
+    :param syncseries1:  handshake pupiltime
+    :param syncseries2:  handshake bonsaitime
     :return:
     """
 
     timeseries0 = timeseries.iloc[0]
-    syncdiff = syncseries1 - syncseries2  # series with diff between clocks
-    drift_scalar = (syncdiff.iloc[-1] - syncdiff.iloc[0])/(syncseries1.iloc[-1]-syncseries1.iloc[0])
+
+    syncdiff = syncseries1 - syncseries2  # series with diff between clocks, get total drfit between clocks
+    # +ve means bonsai drifting away from plabs
+    drift_scalar = (syncdiff.iloc[-1] - syncdiff.iloc[0])/(syncseries1.iloc[-1]-syncseries1.iloc[0])  # total drift/ time elasped plabs
     if math.isnan(drift_scalar):
         drift_scalar = 1
     print(f' first {syncdiff.iloc[0]} last{syncdiff.iloc[-1]}, scalar {drift_scalar}')
-    # corrected_ts = timeseries.apply(lambda t: timeseries0+(t*drift_scalar))
-    corrected_ts = timeseries
+    # correct drift dt*scale factor3.3
+    corrected_ts = timeseries.apply(lambda t: timeseries0+((t-timeseries0)/(1+drift_scalar)))
+    print(f'original endtime: {timeseries.iloc[-1]},correct endtime: {corrected_ts.iloc[-1]}')
+    # corrected_ts = timeseries
     return corrected_ts
 
 
@@ -68,7 +73,7 @@ class Main:
         findfiles(self.datadir, 'extracted_pupils', self.toprocess_dict, self.animals, self.dates)
 
     @lru_cache()
-    def align(self, times_path, pupils_path) -> pd.DataFrame:
+    def align(self, times_path, pupils_path) -> tuple:
         """
 
         :param times_path:
@@ -80,7 +85,9 @@ class Main:
 
         # split pupilcsv into 2d and 3d
         list_df = [pupilcsv[pupilcsv['topic'] == topic] for topic in sorted(pupilcsv['topic'].unique())]
-        pupilcsv_2d, pupilcsv_3d = list_df[0], list_df[1]
+        pupilcsv_2d, pupilcsv_3d = list_df[0].copy(deep=True), list_df[1].copy(deep=True)
+        pupilcsv_2d.index = np.arange(len(pupilcsv_2d.index))
+        pupilcsv_3d.index = np.arange(len(pupilcsv_3d.index))
 
         # format times to timestamps
         timescsv.columns = ['pctime', 'pupiltime', 'bonsaitime']
@@ -91,14 +98,18 @@ class Main:
 
         # correct for any drift in sync
         driftcorrected = correctdrift(pupilcsv_3d['timestamp'], timescsv['pupiltime'], timescsv['bonsaitime'])
+        # driftcorrected = pupilcsv_3d['timestamp']
         # align to bonsaitime
         syncoffest = timescsv['pupiltime'].iloc[0] - timescsv['bonsaitime'].iloc[0]
         alignedtime_secs = driftcorrected - syncoffest
 
         pupilcsv_3d['frametime'] = alignedtime_secs.apply(lambda t: datetime.fromtimestamp(t).time())
-        pupilcsv_3d['diameter'] = pupilcsv_3d['diameter_2d [px]']
-        pupilcsv_3d['diameter 2d'] = pupilcsv_2d['diameter_2d [px]']
-        return pupilcsv_3d
+        pupilcsv_2d['frametime'] = alignedtime_secs.apply(lambda t: datetime.fromtimestamp(t).time())
+        pupilcsv_3d.columns = ['eye_id', 'timestamp', 'topic', 'confidence', 'diameter_2d',
+                               'diameter_3d', '2d_radii', '2d_centre', 'frametime']
+        pupilcsv_2d.columns = ['eye_id', 'timestamp', 'topic', 'confidence', 'diameter_2d',
+                               'diameter_3d', '2d_radii', '2d_centre', 'frametime']
+        return pupilcsv_2d, pupilcsv_3d
 
 
     @lru_cache()
@@ -113,11 +124,12 @@ class Main:
                     else:
                         aligned = self.align(self.toprocess_dict[animal][date]['timesyncfile'],
                                     self.toprocess_dict[animal][date]['extracted_pupilsfile'])
-                        aligned.to_csv(join(self.datadir,'analysed',savename),index=False)
+                        aligned[0].to_csv(join(self.datadir,'aligned3',savename.replace('.csv','_2d.csv')),index=False)
+                        aligned[1].to_csv(join(self.datadir,'aligned3',savename.replace('.csv','_3d.csv')),index=False)
 
 
 if __name__ == '__main__':
-    humans = [f'Human{i}' for i in range(2,16)]
-    humandates = ['220118','220119','220120','220121','220124','220124','220125','220126','220127','220128']
-    run = Main(humans,humandates,r'W:\humanpsychophysics\HumanXDetection\Data',r'C:\bonsai\data\Hilde\Human\timeSyncs')
+    humans = [f'Human{i}' for i in range(20,26)]
+    humandates = ['220311','220316','220405','220407','220407','220408']
+    run = Main(humans,humandates,r'W:\humanpsychophysics\HumanXDetection\Data',r'C:\bonsai\data\Hilde\Human\timeSyncs',)
     run.main_loop()
