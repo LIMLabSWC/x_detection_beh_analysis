@@ -164,7 +164,10 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         'pmed': ['PatternPresentation_Rate',0.6],
         'phigh': ['PatternPresentation_Rate',0.1],
         'ppost': ['PatternPresentation_Rate',0.4],
-        'tones4': ['N_TonesPlayed',4]
+        'tones4': ['N_TonesPlayed',4],
+        'tones3': ['N_TonesPlayed',3],
+        'tones2': ['N_TonesPlayed',2],
+        'tones1': ['N_TonesPlayed',1]
 
 
     }
@@ -506,16 +509,18 @@ def getpatterntraces(data, patterntypes,beh,dur, eventshifts=None,baseline=True,
     return list_eventaligned
 
 
-def plot_eventaligned(eventdata_arr,eventnames,dur,beh,plotax=None,pltsize=(12,9)):
+def plot_eventaligned(eventdata_arr,eventnames,dur,beh,plotax=None,pltsize=(12,9),plotcols=None):
     if plotax is None:
         event_fig, event_ax = plt.subplots(1)
     else:
         event_fig, event_ax = plotax
+    if plotcols is None:
+        plotcols = [f'C{i}' for i in range(len(eventdata_arr))]
     print(f'length input lists {len(eventdata_arr)}')
     for i, trace in enumerate(eventdata_arr):
         tseries = np.linspace(dur[0], dur[1],eventdata_arr[i].shape[1])
         if eventnames[i] is not 'control':
-            event_ax.plot(tseries,np.nanmean(trace,axis=0),
+            event_ax.plot(tseries,np.nanmean(trace,axis=0), color=plotcols[i],
                           label= f'{eventnames[i]}, {trace.shape[0]} Trials')
         else:
             event_ax.plot(tseries,np.nanmean(trace,axis=0), color='k',
