@@ -119,7 +119,7 @@ class Main:
             for date in self.toprocess_dict[animal]:
                 if 'extracted_pupilsfile' in self.toprocess_dict[animal][date].keys():
                     savename = f'{animal}_{date}_pupildata.csv'
-                    if os.path.exists(join(self.datadir,'analysed',savename)):
+                    if os.path.exists(join(self.datadir,'aligned3',savename.replace('.csv','_3d.csv'))):
                         print('path exists not overwriting')
                     else:
                         aligned = self.align(self.toprocess_dict[animal][date]['timesyncfile'],
@@ -129,7 +129,8 @@ class Main:
 
 
 if __name__ == '__main__':
-    humans = [f'Human{i}' for i in range(20,26)]
-    humandates = ['220311','220316','220405','220407','220407','220408']
+    humans = [f'Human{i}' for i in range(16,28)]
+    humandates = ['220208','220209','220210','220215',
+                  '220311','220316','220405','220407','220407','220408','220422','220425']
     run = Main(humans,humandates,r'W:\humanpsychophysics\HumanXDetection\Data',r'C:\bonsai\data\Hilde\Human\timeSyncs',)
     run.main_loop()

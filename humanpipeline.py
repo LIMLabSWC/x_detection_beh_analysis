@@ -1,18 +1,13 @@
-import timeit
-
-import pandas as pd
+from contextlib import suppress
 
 from psychophysicsUtils import *
 import analysis_utils as utils
-from analysis_utils import align_wrapper, plot_eventaligned
 from datetime import datetime, time, timedelta
 from matplotlib import pyplot as plt
-from copy import deepcopy as copy
 import numpy as np
 from scipy.stats import zscore
 import scipy.signal
 import time
-from sklearn.linear_model import LinearRegression
 
 
 # script for building trial data and pupil data dict
@@ -22,7 +17,7 @@ from sklearn.linear_model import LinearRegression
 
 class Main:
     def __init__(self,names, date_list, pkl_filename, tdatadir, pupil_dir,
-                 pupil_file_tag, pupil_samplerate=60.0,outlier_params=(4, 4),
+                 pupil_file_tag, pupil_samplerate=60.0,outlier_params=(4, 4), overwrite=False,
                  han_size=0.2,hpass=0.1,aligneddir='aligned2'):
 
         # load trial data
@@ -56,6 +51,7 @@ class Main:
         self.data = {}
         self.han_size = han_size
         self.hpass = hpass
+        self.overwrite = overwrite
 
     def get_outliers(self,rawx,rawy,rawsize,rawdiameter,confidence=None) -> (np.ndarray,np.ndarray):
 
@@ -76,14 +72,19 @@ class Main:
         return outs_arr.any(axis=0).astype(int),outs_arr[-1,:],outs_arr
 
     def load_pdata(self):
-        print('started')
         today = datetime.strftime(datetime.now(),'%y%m%d')
         figdir = os.path.join(os.getcwd(),'figures',today)
         if not os.path.isdir(figdir):
             os.mkdir(figdir)
-        if self.pklname is not None or os.path.exists(self.pklname) is False:
-            for animal, date in zip(self.animals, self.dates):
-                name = f'{animal}_{date}'
+        if os.path.exists(self.pklname) and self.overwrite is False:
+            with open(self.pklname,'rb') as pklfile:
+                print('Loading existing data')
+                self.data = pickle.load(pklfile)
+        elif os.path.exists(self.pklname) is False or self.overwrite is True:
+            self.data = dict()
+        for animal, date in zip(self.animals, self.dates):
+            name = f'{animal}_{date}'
+            if name not in list(self.data.keys()):
                 try:
                     # Load pupil date for animal as pandas dataframe
                     animal_pupil = pd.read_csv(os.path.join(self.pdir,self.aligneddir,
@@ -95,10 +96,7 @@ class Main:
                     animal_pupil.index = utils.format_timestr(animal_pupil['frametime'])[1]
 
                     print(f'Uniformly sampling to {1/self.samplerate} Hz')
-                    pupil_uni = animal_pupil.resample(f'{self.samplerate}S').backfill().copy() # resample to samplerate
-                    #
-                    # self.data[name].rawPupilDiams = np.array(pupil_uni['diameter_2d'])
-                    # self.data[name].rawTimes = np.array(pupil_uni['scalar'])
+                    pupil_uni = animal_pupil.resample(f'{self.samplerate}S').backfill().copy()  # resample to samplerate
 
                     # get pupil area
                     for col in ['2d_radii']:
@@ -117,10 +115,6 @@ class Main:
                                                                                                                pupil_uni['rawarea'],
                                                                                                                pupil_uni.get('diameter_3d',np.zeros_like(pupil_uni.index)),
                                                                                                                pupil_uni['confidence'])
-                    # filt params
-                    # hanning window
-                    # pupil_empty = np.full_like(pupil_uni['anyisout'],0.0)
-                    # for col2norm in ['2d_centre_x','2d_centre_y','rawarea','diameter_3d']:
                     b, a = scipy.signal.butter(3, 0.025)
                     for col2norm in ['rawarea','diameter_3d']:
 
@@ -163,14 +157,18 @@ class Main:
 
 
 if __name__ == "__main__":
-    humans = [f'Human{i}' for i in range(20,26)]
+    humans = [f'Human{i}' for i in range(16,28)]
     tdatadir = r'C:\bonsai\data\Hilde'
-    humandates = ['220311','220316','220405','220407','220407','220408']
+    humandates = ['220208','220209','220210','220215',
+                  '220311','220316','220405','220407','220407','220408','220422','220425']
+    with suppress(ValueError):
+        humans.remove('Human24')
+        humandates.remove('220407')
     # han_size = 1
     run = Main(humans,humandates,r'pickles\human_familiarity_3d_200Hz_015Shan_driftcorr_hpass01.pkl',tdatadir,r'W:\humanpsychophysics\HumanXDetection\Data',
                'pupildata_3d',200.0,han_size=.15,hpass=0.1,aligneddir='aligned3')
     run.load_pdata()
-    plt.plot(run.data['Human21_220316'].pupildf['rawarea_zscored'])
+    # plt.plot(run.data['Human21_220316'].pupildf['rawarea_zscored'])
     # plt.plot(run.data['Human25_220408'].pupildf['rawarea_zscored'])
 
 
