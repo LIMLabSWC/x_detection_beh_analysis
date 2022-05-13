@@ -12,12 +12,14 @@ from sklearn.linear_model import LinearRegression
 from math import floor,ceil
 
 
+
 class TDAnalysis:
     """
     Class for holding trialdata functions, dataframes, and plots
     """
 
     def __init__(self, tdatadir, animal_list, daterange,):
+        plt.style.use("seaborn-white")
         self.trial_data = utils.merge_sessions(tdatadir,animal_list,'TrialData',daterange)
         self.trial_data = pd.concat(self.trial_data,sort=False,axis=0)
         try:
@@ -26,7 +28,7 @@ class TDAnalysis:
             pass
         self.animals = animal_list
         self.anon_animals = [f'Animal {i}' for i in range(len(self.animals))]  # give animals anon labels
-        self.dates = self.trial_data.loc[self.animals].index.to_frame()['Date'].unique()
+        self.dates = sorted(self.trial_data.loc[self.animals].index.to_frame()['Date'].unique())
 
         # add datetime cols
         for col in self.trial_data.keys():
@@ -34,11 +36,16 @@ class TDAnalysis:
                 if col.find('Wait') == -1 and col.find('dt') == -1:
                     utils.add_datetimecol(self.trial_data,col)
 
+        # add reaction time col
+        stim1_tdelta = self.trial_data['Stim1_Duration'].apply(lambda e: timedelta(0,e))
+        self.trial_data['Reaction_time'] = self.trial_data['Trial_End_dt']-(self.trial_data['Trial_Start_dt'] +
+                                                                            stim1_tdelta)
+
     def beh_daily(self, plot=False, filters=('b1',)) -> (dict, plt.subplots):
         stats_dict = dict()
         for animal in self.animals:
             stats_dict[animal] = dict()  # dictionary to hold daily stats
-            for date in self.trial_data.loc[animal].index.unique():
+            for date in self.dates:
                 try:
                     statnames = ['Trials Done', 'NonViol Trials', 'Early Rate', 'Error Rate']
                     data_day = utils.filter_df(self.trial_data.loc[animal, date], filters)
@@ -60,10 +67,14 @@ class TDAnalysis:
         fig, ax = plt.subplots(len(stats_day.columns), sharex=True)
         if plot:
             for i, animal in enumerate(self.animals):
-                for id, d in enumerate(stats_dict[animal].keys()):
+                for id, d in enumerate(sorted(stats_dict[animal].keys())):
+                    print(d)
                     for f, feature in enumerate(stats_dict[animal][d]):
-                        ax[f].scatter(id, stats_dict[animal][d][feature], marker='o', color=plot_colours[i],
-                                      label=animal, s=2)
+                        if i is 0:
+                            ax[f].scatter(self.dates,np.full_like(self.dates,0),facecolors='none',edgecolor='none',s=15)
+                        ax[f].scatter(d, stats_dict[animal][d][feature], marker='o',facecolors='none',
+                                      edgecolor=f'C{i}',
+                                      label=animal, s=30)
                         if i == 0:
                             ax[f].set_ylabel(f'{feature}')
                             # ax[f].set_xlabel('Session Number')
@@ -76,11 +87,14 @@ class TDAnalysis:
             for axis in ax:
                 xmin, xmax = axis.get_xlim()
                 ymin, ymax = axis.get_ylim()
-                axis.set_xlim(xmin - 0.01, xmax+0.01)
-                axis.set_ylim(ymin - 0.1, ymax+ymax*.1)
+                # axis.set_xlim(xmin - 0.01, xmax+0.01)
+                # axis.set_ylim(ymin - 0.1, ymax+ymax*.1)
 
             by_label = OrderedDict(zip(labels, handles))
-            fig.legend(by_label.values(), by_label.keys())
+            ax[0].legend(by_label.values(), by_label.keys(),loc=1,fontsize='medium',ncol=len(self.animals))
+            # fig.legend(by_label.values(), by_label.keys())
+            fig.set_tight_layout(True)
+            fig.set_size_inches(18, 12)
             tick_dates = []
             for animal in self.animals:
                 tick_dates.extend(stats_dict[animal].keys())
@@ -90,7 +104,7 @@ class TDAnalysis:
 
 
 if __name__ == '__main__':
-    plt.rcParams["figure.figsize"] = [4.00, 3.00]
+    plt.rcParams["figure.figsize"] = [8.00, 6.00]
     # plt.rcParams["figure.autolayout"] = True
 
     datadir = r'C:\bonsai\data'
@@ -102,9 +116,5 @@ if __name__ == '__main__':
                ]
 
     dates = ['17/03/2022', 'now']  # start/end date for analysis
-    plot_colours = plt.cm.magma(np.linspace(0,1,len(animals)))  # generate list of col ids for each animal
     td_obj = TDAnalysis(datadir,animals,dates)
     td_obj.day2day = td_obj.beh_daily(True)
-
-
-
