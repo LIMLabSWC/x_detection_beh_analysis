@@ -147,6 +147,7 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         'c1': ['Tone_Position', 1],
         'd0': ['Pattern_Type', 0],
         'd!0': ['Pattern_Type', 0, '!='],
+        'd-1': ['Pattern_Type', -1],
         'd1': ['Pattern_Type', 1],
         'd2': ['Pattern_Type', 2],
         'd3': ['Pattern_Type', 3],
@@ -167,7 +168,12 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         'tones4': ['N_TonesPlayed',4],
         'tones3': ['N_TonesPlayed',3],
         'tones2': ['N_TonesPlayed',2],
-        'tones1': ['N_TonesPlayed',1]
+        'tones1': ['N_TonesPlayed',1],
+        's-1': ['Session_Block',-1],
+        's0': ['Session_Block',0],
+        's1': ['Session_Block',1],
+        's2': ['Session_Block',2],
+        's3': ['Session_Block',3],
 
 
     }
@@ -635,9 +641,9 @@ def get_diff_traces(arr, basetrace, window, metric='max'):
 
 
 def add_date_ticks(plotax, date_list):
-    dates_unique = pd.Series(date_list).unique()
+    dates_unique = sorted(pd.Series(date_list).unique())
     plotax.set_xticks(np.arange(len(dates_unique)))
-    plotax.set_xticklabels(list(dates_unique), rotation=40, ha='center', size=3)
+    plotax.set_xticklabels(list(dates_unique), rotation=40, ha='center', size=8)
 
 
 def format_timestr(timestr_series) -> (pd.Series, pd.Series):

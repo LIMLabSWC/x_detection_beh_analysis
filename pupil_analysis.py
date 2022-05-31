@@ -324,9 +324,12 @@ class Main:
     # # plt.plot(max_diffs_arr[:,0])
     # plt.plot(max_diffs_arr[:,1])
 if __name__ == "__main__":
-    pkl2use = r'pickles\human_familiarity_3d_200Hz_015Shan_driftcorr_hpass01.pkl'
+    # pkl2use = r'pickles\human_familiarity_3d_200Hz_015Shan_driftcorr_hpass01.pkl'
+    pkl2use = r'pickles\human_class1_3d_200Hz_015Shan_driftcorr_hpass01.pkl'
+
     run = Main(pkl2use, (-1,3))
-    paradigm = 'familiarity'
+    paradigm = ['altvsrand','normdev']
+
     if 'familiarity' in paradigm:  # analysis to run for familiarity paradigm
         run.familiarity = run.get_aligned([['e!0','plow','tones4'],['e!0','tones4','pmed'],
                                            ['e!0','tones4','phigh'],['e!0','tones4','ppost'], ['e=0']],
@@ -367,9 +370,18 @@ if __name__ == "__main__":
         fig.set_size_inches(7,7)
         fig.set_tight_layout(True)
 
-    elif 'class2' in paradigm:
-        run.normdev = run.get_aligned([['e!0','d0',],['e!0','d!0',]],
-                                      viol_shift=[0.0],
-                                      event='ToneTime',xlabel='Time since pattern onset',
-                                      plotlabels=['0.2','0.4','0.9','0.6','control'],plotsess=False)
+    if 'normdev' in paradigm:
+        run.normdev = run.get_aligned([['e!0','s3','d0','tones4'],['e!0','s3','d!0','tones4']],
+                                      viol_shift=[0.5],
+                                      event='Violation',xlabel='Time since pattern onset', pdr=True,
+                                      plotlabels=['normal','deviant'],plotsess=False)
+        run.newnorms = run.get_aligned([['e!0','s3','d0','tones4'],['e!0','s3','d-1','tones4']],
+                                       viol_shift=[0.0],
+                                       event='ToneTime',xlabel='Time since pattern onset', pdr=False,
+                                       plotlabels=['normal','new normals'],plotsess=False)
 
+    if 'altvsrand' in paradigm:
+        run.altvsrand = run.get_aligned([['e!0','s0','tones4'], ['e!0','s1','tones4']], plotsess=False,
+                                        viol_shift=[0.0],
+                                        xlabel='Time since pattern offset', pdr=False,
+                                        plotlabels=['random','alternating'])
