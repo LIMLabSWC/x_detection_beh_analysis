@@ -61,6 +61,8 @@ def merge_sessions(datadir,animal_list,filestr_cond, date_range, datestr_format=
                                 date_series = [session_date] * loaded_file.shape[0]
                                 loaded_file['Name'] = name_series
                                 loaded_file['Date'] = date_series
+                                sess_part = file.split('.')[0][-1]
+                                loaded_file['Session'] = np.full_like(name_series,sess_part)
                                 loaded_file = loaded_file.set_index(['Name','Date']).sort_index()
                                 file_df.append(loaded_file)
                         except pd.errors.EmptyDataError:
@@ -174,7 +176,8 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         's1': ['Session_Block',1],
         's2': ['Session_Block',2],
         's3': ['Session_Block',3],
-
+        'sess_a': ['Session', 'a'],
+        'sess_b': ['Session', 'b']
 
     }
 
