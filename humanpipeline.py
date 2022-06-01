@@ -157,16 +157,23 @@ class Main:
 
 
 if __name__ == "__main__":
-    humans = [f'Human{i}' for i in range(16,28)]
     tdatadir = r'C:\bonsai\data\Hilde'
-    humandates = ['220208','220209','220210','220215',
-                  '220311','220316','220405','220407','220407','220408','220422','220425']
-    with suppress(ValueError):
-        humans.remove('Human24')
-        humandates.remove('220407')
+    #
+    # humans = [f'Human{i}' for i in range(16,28)]
+    # humandates = ['220208','220209','220210','220215',
+    #               '220311','220316','220405','220407','220407','220408','220422','220425']
+
+    # humans dev norm task
+    humans = [f'Human{i}' for i in range(28,32)]
+    humandates = ['220518', '220523', '220524','220530']
+
+    # with suppress(ValueError):
+    #     humans.remove('Human29')
+    #     humandates.remove('220523')
+
     # han_size = 1
-    run = Main(humans,humandates,r'pickles\human_familiarity_3d_200Hz_015Shan_driftcorr_hpass01.pkl',tdatadir,r'W:\humanpsychophysics\HumanXDetection\Data',
-               'pupildata_3d',200.0,han_size=.15,hpass=0.1,aligneddir='aligned3')
+    run = Main(humans,humandates,r'pickles\human_class1_3d_200Hz_015Shan_driftcorr_hpass01.pkl',tdatadir,r'W:\humanpsychophysics\HumanXDetection\Data',
+               'pupildata_3d',200.0,han_size=.15,hpass=0.1,aligneddir='aligned_class1')
     run.load_pdata()
     # plt.plot(run.data['Human21_220316'].pupildf['rawarea_zscored'])
     # plt.plot(run.data['Human25_220408'].pupildf['rawarea_zscored'])

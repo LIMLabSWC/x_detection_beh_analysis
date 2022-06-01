@@ -325,7 +325,9 @@ class Main:
     # plt.plot(max_diffs_arr[:,1])
 if __name__ == "__main__":
     # pkl2use = r'pickles\human_familiarity_3d_200Hz_015Shan_driftcorr_hpass01.pkl'
+    # pkl2use = r'pickles\human_class1_3d_200Hz_015Shan_driftcorr_hpass01_no29.pkl'
     pkl2use = r'pickles\human_class1_3d_200Hz_015Shan_driftcorr_hpass01.pkl'
+
 
     run = Main(pkl2use, (-1,3))
     paradigm = ['altvsrand','normdev']
@@ -377,11 +379,11 @@ if __name__ == "__main__":
                                       plotlabels=['normal','deviant'],plotsess=False)
         run.newnorms = run.get_aligned([['e!0','s3','d0','tones4'],['e!0','s3','d-1','tones4']],
                                        viol_shift=[0.0],
-                                       event='ToneTime',xlabel='Time since pattern onset', pdr=False,
+                                       event='ToneTime',xlabel='Time since pattern onset', pdr=True,
                                        plotlabels=['normal','new normals'],plotsess=False)
 
     if 'altvsrand' in paradigm:
-        run.altvsrand = run.get_aligned([['e!0','s0','tones4'], ['e!0','s1','tones4']], plotsess=False,
+        run.altvsrand = run.get_aligned([['e!0','s0','tones4'], ['e!0','s1','tones4']], plotsess=True,
                                         viol_shift=[0.0],
-                                        xlabel='Time since pattern offset', pdr=False,
+                                        xlabel='Time since pattern offset', pdr=True,
                                         plotlabels=['random','alternating'])
