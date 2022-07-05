@@ -163,7 +163,7 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         'normtrain': ['PatternID', normtrain, 'isin'],
         'normtest':['PatternID', normtest, 'isin'],
         'pnone': ['PatternPresentation_Rate',1.0],
-        'plow': ['PatternPresentation_Rate',0.8],
+        'plow': ['PatternPresentation_Rate',[0.8,0.9]],
         'pmed': ['PatternPresentation_Rate',0.6],
         'phigh': ['PatternPresentation_Rate',0.1],
         'ppost': ['PatternPresentation_Rate',0.4],
@@ -177,7 +177,8 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         's2': ['Session_Block',2],
         's3': ['Session_Block',3],
         'sess_a': ['Session', 'a'],
-        'sess_b': ['Session', 'b']
+        'sess_b': ['Session', 'b'],
+        'stage3': ['Stage',3]
 
     }
 
@@ -188,7 +189,11 @@ def filter_df(data_df, filters) -> pd.DataFrame:
             _df = filt4pupil(df2filter)
         elif len(fildict[fil]) == 2:
             cond = fildict[fil][1]
-            _df = copy(df2filter[df2filter[column] == cond])
+            if isinstance(cond,list):
+                __df = copy(df2filter[df2filter[column].isin(cond)])
+            else:
+                _df = copy(df2filter[df2filter[column] == cond])
+
         elif len(fildict[fil]) == 3:
             cond = fildict[fil][1]
             if fildict[fil][2] == '>':
@@ -385,12 +390,18 @@ def plot_frametimes(datfile):
 def add_datetimecol(df, colname, timefmt='%H:%M:%S.%f'):
 
     datetime_arr = []
-    for t in df[colname]:
-        if len(t) > 15:
-            datetime_arr.append((datetime.strptime(t[:-1], timefmt)))
+    for i,t in enumerate(df[colname]):
+        if isinstance(t,str):
+            if len(t) > 15:
+                datetime_arr.append((datetime.strptime(t[:-1], timefmt)))
+            else:
+                try:datetime_arr.append((datetime.strptime(t,'%H:%M:%S')))
+                except ValueError or TypeError: print(t,df.index[i])
         else:
-            datetime_arr.append((datetime.strptime(t,'%H:%M:%S')))
-    df[f'{colname}_dt'] = np.array(datetime_arr)
+            datetime_arr.append(np.nan)
+            print(t,df.index[i])
+    try:df[f'{colname}_dt'] = np.array(datetime_arr)
+    except:ValueError
 
 def align2eventScalar(df,pupilsize,pupiltimes, pupiloutliers,beh, dur, filters=('4pupil','b1','c1'), baseline=False,eventshift=0,
                       outlierthresh=0.9,stdthresh=3,subset=None):
@@ -429,14 +440,13 @@ def align2eventScalar(df,pupilsize,pupiltimes, pupiloutliers,beh, dur, filters=(
                 baseline_mean = np.nanmean(eventpupil.loc[eventtime - timedelta(baseline_dur-eventshift):
                                                eventtime + timedelta(eventshift)])
                 eventpupil = eventpupil - baseline_mean
-                # # regress out
-                # if np.isnan(baseline_mean) is False:
-                #     reg = LinearRegression().fit(np.full_like(pupildiams,baseline_mean).reshape(-1, 1), pupildiams)
-                #     eventpupil = eventpupil - (reg.coef_ * eventpupil + reg.intercept_) - baseline_mean
+
             if len(eventpupil)>0:
                 zeropadded = np.full_like(eventpupil_arr[0],0.0)
                 try: zeropadded[:len(eventpupil)] = eventpupil
                 except ValueError:print('bad shape')
+                if zeropadded.size <10:
+                    print('something')
                 eventpupil_arr[i] = zeropadded
     # print(f'Outlier Trials:{outliers}\n Too high varinace trials:{varied}')
     # print(eventpupil_arr.shape)
@@ -449,6 +459,8 @@ def align2eventScalar(df,pupilsize,pupiltimes, pupiloutliers,beh, dur, filters=(
         # print(firsts.shape,middles.shape,lasts.shape)
         return [firsts,middles,lasts]
     else:
+        if nonans_eventpuil.size < 10:
+            print('something')
         return nonans_eventpuil[:,:-1]
 
 
@@ -507,6 +519,7 @@ def getpatterntraces(data, patterntypes,beh,dur, eventshifts=None,baseline=True,
             lasts.append(tone_aligned_pattern[2])
 
         else:
+            # if tone_aligned_pattern.size >10:
             _pattern_tonealigned.append(tone_aligned_pattern)
         if subset is not None:
             print('len subsests=',len(firsts),len(mids),len(lasts))
@@ -585,7 +598,7 @@ def align_wrapper(datadict,filters,align_beh, duration, alignshifts=None, plotse
         sess_trials[sess] = [s.shape[0] for s in aligned_dict[sess]]
         if plotsess:
             sess_plot = plot_eventaligned(aligned_dict[sess],plotlabels,duration,plottitle)
-            sess_plot[1].set_title(f'{animal_labels[sessix]}: Pupil response to Pattern',size=8)
+            sess_plot[1].set_title(f'{sess}: Pupil response to Pattern',size=8)
             sess_plot[1].set_xlabel(xlabel,size=6)
             sess_plot[1].set_ylabel('Normalised pupil diameter',size=6)
             sess_plot[1].set_ylim((-1,2))
@@ -709,13 +722,27 @@ def smooth(x,window_len=11,window='hanning'):
 
 
 def butter_highpass(cutoff, fs, order=5):
-	nyq = 0.5 * fs
-	normal_cutoff = cutoff / nyq
-	b, a = scipy.signal.butter(order, normal_cutoff, btype = "high", analog = False)
-	return b, a
+    nyq = 0.5 * fs
+    normal_cutoff = cutoff / nyq
+    b, a = scipy.signal.butter(order, normal_cutoff, btype = "high", analog = False)
+    return b, a
 
 
 def butter_highpass_filter(data, cutoff, fs, order=5):
-	b, a = butter_highpass(cutoff, fs, order=order)
-	y = scipy.signal.filtfilt(b, a, data)
-	return y
+    b, a = butter_highpass(cutoff, fs, order=order)
+    y = scipy.signal.filtfilt(b, a, data)
+    return y
+
+
+def find_good_sessions(df,stage,n_critereon=100):
+    sessions = df.index.unique()
+    gd_sessions = []
+    for sess_ix in sessions:
+        sess_df  = filter_df(df,['e!0',f'stage{stage}',])
+        if sess_df is not None:
+            if sess_df.shape[0] >= n_critereon:
+                gd_sessions.append(sess_ix)
+    gd_sessions_names = [sess[0] for sess in gd_sessions]
+    gd_sessions_dates = [sess[1] for sess in gd_sessions]
+
+    return gd_sessions, gd_sessions_names, gd_sessions_dates
