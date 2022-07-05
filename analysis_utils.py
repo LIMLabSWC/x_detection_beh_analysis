@@ -177,7 +177,12 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         's2': ['Session_Block',2],
         's3': ['Session_Block',3],
         'sess_a': ['Session', 'a'],
-        'sess_b': ['Session', 'b']
+        'sess_b': ['Session', 'b'],
+        'stage0': ['Stage', 0],
+        'stage1': ['Stage', 1],
+        'stage2': ['Stage', 2],
+        'stage3': ['Stage',3],
+        'stage4': ['Stage', 4],
 
     }
 
