@@ -64,7 +64,7 @@ def merge_sessions(datadir,animal_list,filestr_cond, date_range, datestr_format=
                                 sess_part = file.split('.')[0][-1]
                                 loaded_file['Session'] = np.full_like(name_series,sess_part)
                                 loaded_file = loaded_file.set_index(['Name','Date']).sort_index()
-                                file_df.append(loaded_file)
+                                file_df.append(loaded_file.dropna())
                         except pd.errors.EmptyDataError:
                             print('Empty data frame')
 
