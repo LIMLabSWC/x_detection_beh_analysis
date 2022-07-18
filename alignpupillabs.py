@@ -1,6 +1,6 @@
 import pandas as pd
 from datetime import datetime
-# from analysis_utils import findfiles
+from analysis_utils import merge_sessions, find_good_sessions, add_datetimecol
 import os
 from os.path import join
 from functools import lru_cache
@@ -42,8 +42,11 @@ def correctdrift(timeseries, syncseries1, syncseries2) -> pd.Series:
     syncdiff = syncseries1 - syncseries2  # series with diff between clocks, get total drfit between clocks
     # +ve means bonsai drifting away from plabs
     drift_scalar = (syncdiff.iloc[-1] - syncdiff.iloc[0])/(syncseries1.iloc[-1]-syncseries1.iloc[0])  # total drift/ time elasped plabs
-    if math.isnan(drift_scalar):
-        drift_scalar = 1
+    if math.isnan(drift_scalar) or abs(drift_scalar) > 0.1:
+        if drift_scalar<0:
+            drift_scalar = -0.000125
+        else:
+            drift_scalar= 0.000125
     print(f' first {syncdiff.iloc[0]} last{syncdiff.iloc[-1]}, scalar {drift_scalar}')
     # correct drift dt*scale factor3.3
     corrected_ts = timeseries.apply(lambda t: timeseries0+((t-timeseries0)/(1+drift_scalar)))
@@ -53,7 +56,7 @@ def correctdrift(timeseries, syncseries1, syncseries2) -> pd.Series:
 
 
 class Main:
-    def __init__(self, animals, dates, datadir, timesyncdir):
+    def __init__(self, animals, dates, datadir, timesyncdir,aligned_dir,overwrite,merge):
         """
 
         :param animals:
@@ -64,6 +67,9 @@ class Main:
         self.datadir = datadir
         self.timesyncdir = timesyncdir
         self.toprocess_dict = dict()
+        self.aligned_dir = aligned_dir
+        self.overwrite = overwrite
+        self.merge = merge
 
     @lru_cache()
     def findfiles(self):
@@ -119,18 +125,58 @@ class Main:
             for date in self.toprocess_dict[animal]:
                 if 'extracted_pupilsfile' in self.toprocess_dict[animal][date].keys():
                     savename = f'{animal}_{date}_pupildata.csv'
-                    if os.path.exists(join(self.datadir,'aligned3',savename.replace('.csv','_3d.csv'))):
-                        print('path exists not overwriting')
+                    output_fullpath = f"{join(self.datadir,self.aligned_dir,savename.replace('.csv','_3d.csv'))}"
+                    output_fullpath = join(f"{output_fullpath.split('.')[0]}a.csv")
+                    if not os.path.isdir(os.path.split(output_fullpath)[0]):
+                        os.mkdir(os.path.split(output_fullpath)[0])
+                    if os.path.exists(output_fullpath) and not self.overwrite:
+                        print('not overwriting')
+                        continue
+                    if os.path.exists(output_fullpath):  # check
+                        old_df3d = pd.read_csv(output_fullpath)
+                        old_df2d = pd.read_csv(output_fullpath.replace('_3d','_2d'))
+                        print('path exists will merging')
                     else:
+                        old_df3d = None
+                        old_df2d = None
+                    try:
                         aligned = self.align(self.toprocess_dict[animal][date]['timesyncfile'],
-                                    self.toprocess_dict[animal][date]['extracted_pupilsfile'])
-                        aligned[0].to_csv(join(self.datadir,'aligned3',savename.replace('.csv','_2d.csv')),index=False)
-                        aligned[1].to_csv(join(self.datadir,'aligned3',savename.replace('.csv','_3d.csv')),index=False)
+                                self.toprocess_dict[animal][date]['extracted_pupilsfile'])
+                        aligned2dsave = pd.concat([old_df2d,aligned[0]])
+                        aligned2dsave.to_csv(output_fullpath.replace('_3d','_2d') ,index=False)
+                        aligned3dsave = pd.concat([old_df3d,aligned[0]])
+                        aligned3dsave.to_csv(join(output_fullpath),index=False)
+                    except KeyError:
+                            print('keyerror')
 
 
 if __name__ == '__main__':
-    humans = [f'Human{i}' for i in range(16,28)]
-    humandates = ['220208','220209','220210','220215',
-                  '220311','220316','220405','220407','220407','220408','220422','220425']
-    run = Main(humans,humandates,r'W:\humanpsychophysics\HumanXDetection\Data',r'C:\bonsai\data\Hilde\Human\timeSyncs',)
-    run.main_loop()
+    subject_type = 'mice'
+
+    if subject_type in ['mice', 'rats']:
+        animals = ['DO45','DO46','DO47','DO48']
+        dates = ['13/06/2022', 'now']
+        tdatadir = r'C:\bonsai\data\Dammy'
+        protocol_dirname = r'W:\mouse_pupillometry\mousenormdev'
+        protocol_aligneddir = f'aligned_{os.path.split(protocol_dirname)[-1]}'
+
+        td_df = pd.concat(merge_sessions(tdatadir,animals,'TrialData',dates),sort=False,axis=0,)
+        for col in td_df.keys():
+                    if col.find('Time') != -1 or col.find('Start') != -1 or col.find('End') != -1:
+                        if col.find('Wait') == -1 and col.find('dt') == -1:
+                            add_datetimecol(td_df,col)
+        valid_sessions = find_good_sessions(td_df,4,50)
+        run = Main(valid_sessions[1],valid_sessions[2],protocol_dirname,
+                   tdatadir,protocol_aligneddir,overwrite=1,merge=1)
+        run.main_loop()
+
+    else:
+        # humans = [f'Human{i}' for i in range(16,28)]
+        humandates = ['220208','220209','220210','220215',
+                      '220311','220316','220405','220407','220407','220408','220422','220425']
+        # humans dev norm task
+        humans = [f'Human{i}' for i in range(28,32)]
+        # humandates = ['220518','220523', '220524', '220530']
+        run = Main(humans,humandates,r'W:\humanpsychophysics\HumanXDetection\Data',r'C:\bonsai\data\Hilde\Human\timeSyncs',
+                   'aligned_class1')
+        run.main_loop()

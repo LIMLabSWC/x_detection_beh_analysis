@@ -8,17 +8,29 @@ import numpy as np
 from scipy.stats import zscore
 import scipy.signal
 import time
-from humanpipeline import Main as Main
+from pupilpipeline import Main as Main
+
 
 if __name__ == "__main__":
     tdatadir = r'C:\bonsai\data\Dammy'
 
+    # pdatadir = r'W:\mouse_pupillometry\mousenormdev\aligned_mousenormdev'
     pdatadir = r'W:\mouse_pupillometry\mousefam\aligned_mousefam'
+
+    aligneddir = os.path.split(pdatadir)[-1]
     splitdir = np.array([path.split('_') for path in os.listdir(pdatadir)])
     animals, animaldates = splitdir[:,0], splitdir[:,1]
+    spec_animal = []
+    spec_animal_dates = []
+
+    for i,e in enumerate(animals):
+        if e in ['DO48']:  #['DO48']:
+            spec_animal.append(e)
+            spec_animal_dates.append(animaldates[i])
 
     # han_size = 1
-    run = Main(animals,animaldates,r'pickles\mice_fam_2d_200Hz_015Shan_driftcorr_hpass01.pkl',tdatadir,
-               r'W:\mouse_pupillometry\mousefam',
-               'pupildata_2d',200.0,han_size=.15,hpass=0.1,aligneddir='aligned_mousefam')
+    run = Main(spec_animal,spec_animal_dates,r'pickles\DO48_fam_2d_100Hz_020Shan_driftcorr_hpass04_wdlc.pkl',tdatadir,
+               pdatadir,
+               'pupildata_2d',100.0,han_size=.2,hpass=0.25,aligneddir=aligneddir,
+               subjecttype='mouse',dlc_snapshot=1300000,overwrite=False)
     run.load_pdata()
