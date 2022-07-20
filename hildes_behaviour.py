@@ -10,7 +10,10 @@ from matplotlib import pyplot as plt
 import matplotlib as mpl
 import analysis_utils as utils
 import pylab
-from sklearn.linear_model import LinearRegression
+from sklearn import linear_model
+from sklearn.metrics import mean_squared_error, r2_score
+import seaborn as sns
+import statsmodels.api as sm
 from math import floor,ceil, isnan
 from statistics import mean, stdev, median
 from scipy import stats
@@ -22,8 +25,11 @@ class TDAnalysis:
     Class for holding trialdata functions, dataframes, and plots
     """
 
-    def __init__(self, tdatadir, animal_list, daterange,):
+    def __init__(self, tdatadir, animal_list, daterange, type):
         plt.style.use("seaborn-white")
+        if type == 'human':
+            daterange = [sorted(daterange)[0], sorted(daterange)[-1]]
+
         self.trial_data = utils.merge_sessions(tdatadir,animal_list,'TrialData',daterange)
         self.trial_data = pd.concat(self.trial_data,sort=False,axis=0)
         try:
@@ -180,7 +186,8 @@ class TDAnalysis:
         plot_data = {}
         fig, ax = plt.subplots(2,2)
         fig2, ax2 = plt.subplots(2,2)
-        fig.suptitle("Animal performance depending on pattern presentation")
+        fig.suptitle(f'Animal performance ~ pattern or none- {stage}')
+        fig2.suptitle(f'Animal performance ~ pattern or none - {stage}')
         ax = ax.flatten()
         ax2 = ax2.flatten()
         c_map = mpl.cm.get_cmap('Paired')
@@ -190,23 +197,28 @@ class TDAnalysis:
             daily_pattern_rate = []
             daily_none_rate = []
             date_list = []
+            trials_day = []
             for date in self.dates:
-                if (utils.filter_df(data,['b1'])['ToneTime_dt'] != datetime.strptime('00:00:00','%H:%M:%S')).any():
-                    try:
-                        pattern_trials = utils.filter_df(data.loc[date], ['e!0',stage]).shape[0]
-                        success_pattern = utils.filter_df(data.loc[date], ['a1', 'e!0',stage]).shape[0]
-                        none_trials = utils.filter_df(data.loc[date], ['e=0',stage]).shape[0]
-                        success_none = utils.filter_df(data.loc[date], ['a1', 'e=0',stage]).shape[0]
+                if self.type == 'mouse':
+                    if (utils.filter_df(data,['b1'])['ToneTime_dt'] != datetime.strptime('00:00:00','%H:%M:%S')).any():
+                        #or if human
                         try:
-                            p_success_if = success_pattern / pattern_trials
-                            p_success_none = success_none / none_trials
-                            daily_pattern_rate.append(p_success_if)
-                            daily_none_rate.append(p_success_none)
-                            date_list.append(date)
-                        except ZeroDivisionError:
-                            print('Zero division: ', success_pattern)
-                    except KeyError:
-                        print('no data for this date: ', date)
+                            pattern_trials = utils.filter_df(data.loc[date], ['e!0',stage]).shape[0]
+                            success_pattern = utils.filter_df(data.loc[date], ['a1', 'e!0',stage]).shape[0]
+                            none_trials = utils.filter_df(data.loc[date], ['e=0',stage]).shape[0]
+                            success_none = utils.filter_df(data.loc[date], ['a1', 'e=0',stage]).shape[0]
+                            all_trials = pattern_trials+none_trials
+                            try:
+                                p_success_if = success_pattern / pattern_trials
+                                p_success_none = success_none / none_trials
+                                daily_pattern_rate.append(p_success_if)
+                                daily_none_rate.append(p_success_none)
+                                date_list.append(date)
+                                trials_day.append(str(all_trials))
+                            except ZeroDivisionError:
+                                print('Zero division: ', success_pattern)
+                        except KeyError:
+                            print('no data for this date: ', date)
 
             #none_stats = {'median': median(daily_none_rate), 'mean': mean(daily_none_rate), 'stdev': stdev(daily_none_rate)}
             #pattern_stats = {'median': median(daily_pattern_rate), 'mean': mean(daily_pattern_rate), 'stdev': stdev(daily_pattern_rate)}
@@ -222,8 +234,8 @@ class TDAnalysis:
             if len(daily_pattern_rate) > 1:  # animal has only done 1 day
                 st_err = [stdev(daily_none_rate), stdev(daily_pattern_rate)]
                 #stat_dict[animal]['st_err'] = st_err
-            else:
-                stats[animal]['st_err'] = 0
+            #else:
+                #stats[animal]['st_err'] = 0
             xaxis = ['no pattern', 'pattern']
             #ax[n].title(animal)
             ax[n].boxplot(df, labels=xaxis, positions=range(len(df.columns)))
@@ -238,17 +250,21 @@ class TDAnalysis:
                 ax[n].text(-0.2,0.2, 'p-value: %.3f' % (p_value))
             colors = [np.array(color[n]), 'grey']
             #plt.setp(ax2, xticks=range(0,len(date_list)), xticklabels=date_list )
-            for i, column in enumerate(df):
-                ax2[n].plot(date_list, df[column], c=colors[i], marker='.', label='column')
-                ax2[n].legend(loc=0)
-                ax2[n].set(ylabel='Correct rate', title = animal)
-                plt.xticks(rotation=60) # why are not all rotated?
-
+            try:
+                coord = np.arange(0, 1, (1/len(date_list))).tolist()
+                for i, column in enumerate(df):
+                    ax2[n].plot(date_list, df[column], c=colors[i], marker='.', label=column)
+                    ax2[n].legend(loc=0)
+                    ax2[n].set(ylabel='Correct rate', title = animal)
+                    ax2[n].set_xticks(date_list, labelrotation=60) # why are not all rotated?
+                for i in range(len(coord)):
+                    if float(trials_day[i]) < 100:
+                        ax2[n].text(date_list[i], (df['none'][i]-0.1), trials_day[i], fontsize= 'small')
+            except ZeroDivisionError:
+                print('ZeroDivisionError', 'date_list: ',len(date_list), animal)
 
 
         return  plot_data
-
-
 
 
     def first_vs_second(self):
@@ -308,15 +324,104 @@ class TDAnalysis:
         return fig, ax
 
 
-    def time_since(self):
+    def since_pattern(self):
         # add column to dataframe that involves the time duration between patten presentation and x presentation
-        data = utils.filter_df(self.trial_data, ['b1']['e!0']) # only need main-sess trials where pattern is presented
-        data["pattern_to_x"] = np.nan # or just = ''? empty column with the time passed from pattern presentation to
-        #for i,row in df.iterrows():
-            #row[dat]
-            # take the datetime of pattern presentation and the datetime of x presentation and subtract
-            # make it into a useful time measure
-            # replace nan in new column with value
+        c_map = mpl.cm.get_cmap('Paired')
+        color = c_map(np.random.choice(range(0, 9), 3, replace=False))
+        if type == 'mouse':
+            data = pd.DataFrame(utils.filter_df(self.trial_data, ['b1','e!0'])) # only need main-sess trials where pattern is presented
+        if type =='human':
+            data = pd.DataFrame(utils.filter_df(self.trial_data, ['e!0']))  # only need trials where pattern is presented
+        df = data.drop(columns=[
+            'Stim1_Amplitude', 'GoTone_Amplitude', "WarmUp", "RewardTone_Time", "Gap_Time", 'ToneTime', 'Trial_End',
+            'Trial_Start', 'InterTrial_Duration', 'Tone_Position', 'N_TonesPlayed', 'Withdraw_WaitTime',
+            'RewardLED_Duration', 'GapTone_Amplitude', 'Response_Window', 'Session_Block'])
+        data2 = pd.DataFrame(
+            utils.filter_df(self.trial_data, ['b1', 'e=0']))  # main-sess trials where pattern is not presented
+        df2 = data2.drop(
+            columns=['Stim1_Amplitude', 'GoTone_Amplitude', "WarmUp", "RewardTone_Time", "Gap_Time", 'ToneTime',
+                     'Trial_End', 'Trial_Start'])
+        df['Trial_Outcome'].replace(-1,0, inplace=True)
+        df2['Trial_Outcome'].replace(-1, 0, inplace=True)
+        count_fail = len(df[df['Trial_Outcome'] == 0])
+        count_correct = len(df[df['Trial_Outcome'] == 1])
+        percent_fail = count_fail / (count_fail  + count_correct)
+        print("percentage fail", percent_fail * 100)
+        percent_correct = count_correct / (count_fail + count_correct)
+        print("percentage correct", percent_correct * 100)
+        #pd.crosstab(df.Reward_Amount, df.Trial_Outcome).plot(kind='bar')
+        #plt.xlabel('Reward amount')
+        #plt.ylabel('Frequency')
+        #pd.crosstab(df.PatternPresentation_Rate, df.Trial_Outcome).plot(kind='bar')
+        #plt.xlabel('PatternPresentation_Rate')
+        #plt.ylabel('Frequency')
+        #pd.crosstab(df.PostTone_Duration, df.Trial_Outcome).plot(kind='bar')
+        #plt.xlabel('PostTone_Duration')
+        #plt.ylabel('Frequency')
+
+        #table = pd.crosstab(df.PostTone_Duration, df.Trial_Outcome)
+        #table.div(table.sum(1).astype(float), axis=0).plot(kind='bar', stacked=True, color=[color[1], color[2]])
+        #plt.title('PostTone_Duration vs Trial_Outcome')
+        #plt.xlabel('PostTone_Duration')
+        #plt.ylabel('Proportion trials')
+
+        table = pd.crosstab(df.Stim1_Duration, df.Trial_Outcome)
+        table.div(table.sum(1).astype(float), axis=0).plot(kind='bar', stacked=True, color=(color[1], color[2]))
+        plt.title('Stim1_Duration vs Trial_Outcome')
+        plt.xlabel('Stim1_Duration')
+        plt.ylabel('Proportion trials')
+
+        #table = pd.crosstab(df2.PostTone_Duration, df2.Trial_Outcome)
+        #table.div(table.sum(1).astype(float), axis=0).plot(kind='bar', stacked=True, color=[color[1], color[2]])
+        #plt.title('PostTone_Duration vs Trial_Outcome - no pattern')
+        #plt.xlabel('PostTone_Duration')
+        #plt.ylabel('Proportion trials')
+
+        #table = pd.crosstab(df.Reward_Amount, df.Trial_Outcome)
+        #table.div(table.sum(1).astype(float), axis=0).plot(kind='bar', stacked=True)
+        #plt.title('Reward_Amount vs Trial_Outcome - no pattern')
+        #plt.xlabel('Reward_Amount')
+        #plt.ylabel('Proportion trials')
+
+        #axes = pd.plotting.scatter_matrix(df, alpha=0.2)
+        #plt.tight_layout()
+
+        #sns.catplot(x='Trial_Outcome', y='PostTone_Duration',  data=df)
+
+        durations = sorted(df['PostTone_Duration'].unique())
+        values = df['PostTone_Duration'].value_counts()
+        rate_value_pattern = []
+        rate_value_none = []
+        total_none_list = []
+        total_pattern_list = []
+        for i in durations:
+            success_pattern = utils.filter_df(df.loc[df['PostTone_Duration'] == i], ['a1']).shape[0]
+            total_pattern = (df.loc[df['PostTone_Duration'] == i]).shape[0]
+            success_none = utils.filter_df(df2.loc[df2['PostTone_Duration'] == i], ['a1']).shape[0]
+            total_none = (df2.loc[df2['PostTone_Duration'] == i]).shape[0]
+            rate_value_pattern.append(success_pattern/total_pattern)
+            rate_value_none.append(success_none/total_none)
+            total_none_list.append(total_none)
+            total_pattern_list.append(total_pattern)
+        fig, ax = plt.subplots()
+        colors = ['grey' ,np.array(color[0])]
+        string_durations = [str(i) for i in durations]
+        rate_dict = {'pattern': rate_value_pattern, 'no pattern': rate_value_none}
+        for i, key in enumerate(rate_dict):
+            ax.scatter(durations, rate_dict[key], c=colors[i])
+        for t, time in enumerate(durations):
+            ax.text(time+0.1, rate_dict['pattern'][t], f'n:{values[time]}', fontsize='small')
+        ax.legend(rate_dict)
+        ax.set_title('Correct rate for different post tone durations')
+        ax.set_xticks(durations)
+        #ax.scatter(string_durations, rate_value_none, label = 'no pattern')
+
+
+        plt.show()
+
+
+
+
         # then use ulils.filtr_df for filtering into success or failure
         # make two separate dataframes containing success and failure success_df, fail_df where all other data is removed
         # plt.bar([success, failure], [success_df.shape[0], fail_df.shape[0]]) maybe add percentages
@@ -330,21 +435,22 @@ class TDAnalysis:
 
 
 if __name__ == '__main__':
-    plt.rcParams["figure.figsize"] = [6.00, 4.00]
+    plt.rcParams["figure.figsize"] = [8.00, 6.00]
     # plt.rcParams["figure.autolayout"] = True
 
-    datadir = r'C:\bonsai\data'
-    #datadir = '/Users/hildelt/SWC_project/data'
+    #datadir = r'C:\bonsai\data'
+    datadir = '/Users/hildelt/SWC_project/data'
     animals = [ 'DO45', 'DO46', 'DO47', 'DO48']
     #animals = [f'Human{i}' for i in range(28,32)]
 
     dates = ['14/06/2022', 'now']  # start/end date for analysis
-    td_obj = TDAnalysis(datadir,animals,dates)
+    td_obj = TDAnalysis(datadir,animals,dates, type='human')#type = mouse or human
     #td_obj.day2day = td_obj.beh_daily(True)
     #td_obj.warmup_vs_main = td_obj.warmup()
-    td_obj.pattern_response = td_obj.pattern(stage ='stage4') #needs a string defining the stage refering to utils.filtr_df() function
+    #td_obj.pattern_response = td_obj.pattern(stage ='stage4')
+    #td_obj.pattern_response = td_obj.pattern(stage ='stage3')#needs a string defining the stage refering to utils.filtr_df() function
     #td_obj.session = td_obj.first_vs_second()
-    #td_obj.after_pattern = td_obj.time_since()
+    td_obj.time_since = td_obj.since_pattern()
     plt.show()
 
     # top rig:

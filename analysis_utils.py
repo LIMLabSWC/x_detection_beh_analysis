@@ -174,6 +174,7 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         's-1': ['Session_Block',-1],
         's0': ['Session_Block',0],
         's1': ['Session_Block',1],
+        's01': ['Session_Block',[0,1]],
         's2': ['Session_Block',2],
         's3': ['Session_Block',3],
         'sess_a': ['Session', 'a'],
