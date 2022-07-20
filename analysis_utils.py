@@ -10,7 +10,9 @@ from matplotlib import pyplot as plt
 import pandas as pd
 from sklearn.linear_model import LinearRegression
 import scipy
-
+import circle_fit as cf
+from math import pi
+import warnings
 
 def merge_sessions(datadir,animal_list,filestr_cond, date_range, datestr_format='%y%m%d') -> list:
     """
@@ -138,6 +140,10 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         else:
             normtrain.append(pat)
 
+    # get all time=00:00:00
+    all_dates = data_df.index.to_frame()['Date'].unique()
+    all_dates_t0 = [datetime.strptime(e,'%y%m%d') for e in all_dates]
+
     fildict = {
         'a0': ['Trial_Outcome', 0],
         'a1': ['Trial_Outcome', 1],
@@ -148,13 +154,14 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         'c0': ['Tone_Position', 0],
         'c1': ['Tone_Position', 1],
         'd0': ['Pattern_Type', 0],
-        'd!0': ['Pattern_Type', 0, '!='],
+        'd!0': ['Pattern_Type', 0, '>'],
         'd-1': ['Pattern_Type', -1],
         'd1': ['Pattern_Type', 1],
         'd2': ['Pattern_Type', 2],
         'd3': ['Pattern_Type', 3],
-        'e!0': ['ToneTime_dt',datetime.strptime('00:00:00','%H:%M:%S'),'!='],
-        'e=0': ['ToneTime_dt',datetime.strptime('00:00:00','%H:%M:%S')],
+        'd4': ['Pattern_Type', [1,3]],
+        'e!0': ['ToneTime_dt',all_dates_t0,'notin'],
+        'e=0': ['ToneTime_dt',all_dates_t0,'isin'],
         '4pupil': ['na'],
         'devrep':['PatternID',dev_repeat,'isin'],
         'devord': ['PatternID', dev_nonorder, 'isin'],
@@ -176,6 +183,7 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         's1': ['Session_Block',1],
         's01': ['Session_Block',[0,1]],
         's2': ['Session_Block',2],
+        's2': ['Session_Block',2],
         's3': ['Session_Block',3],
         'sess_a': ['Session', 'a'],
         'sess_b': ['Session', 'b'],
@@ -194,7 +202,7 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         elif len(fildict[fil]) == 2:
             cond = fildict[fil][1]
             if isinstance(cond,list):
-                __df = copy(df2filter[df2filter[column].isin(cond)])
+                _df = copy(df2filter[df2filter[column].isin(cond)])
             else:
                 _df = copy(df2filter[df2filter[column] == cond])
 
@@ -208,6 +216,8 @@ def filter_df(data_df, filters) -> pd.DataFrame:
                 _df = copy(df2filter[df2filter[column] != cond])
             elif fildict[fil][2] == 'isin':
                 _df = copy(df2filter[df2filter[column].isin(fildict[fil][1])])
+            elif fildict[fil][2] == 'notin':
+                _df = copy(df2filter[np.invert(df2filter[column].isin(fildict[fil][1]))])
             else:
                 print('incorrect format used, filter skipped')
                 _df = df2filter
@@ -223,8 +233,10 @@ def filt4pupil(data_df):
     gd_df = filter_df(data_df, ['a3','c0'])
     viol_df = filter_df(data_df, ['a2','c0'])
     # _df = viol_df[(viol_df['Trial_End_dt']-viol_df['ToneTime_dt']).apply(lambda t: t.total_seconds()) >= 2]
-    _df = viol_df[(viol_df['Trial_End_scalar']-viol_df['ToneTime_scalar']) >= 2]
-    return pd.concat([gd_df,viol_df])
+    # _df = viol_df[(viol_df['Trial_End_scalar']-viol_df['ToneTime_scalar']) >= 2]
+    _df = data_df[(data_df['Trial_End_scalar']-data_df['ToneTime_scalar']) >= 3]
+    # return pd.concat([gd_df,_df])
+    return _df
 
 
 def plot_performance(data_df, stims, animal_list, date_range, marker_colors):
@@ -305,7 +317,6 @@ def plot_metric_v_stimdur(data_df, feature,value, animal_list, date_range, marke
             perfomance_ax.scatter(stims, performance[i], label=f'{animal},{ntrial_list[i]} Trials',
                                color=marker_colors[i])
         else:
-            print('something weird happened')
             return None
 
     perfomance_ax.set_ylim((0,1.1))
@@ -394,6 +405,8 @@ def plot_frametimes(datfile):
 def add_datetimecol(df, colname, timefmt='%H:%M:%S.%f'):
 
     datetime_arr = []
+    date_array = df.index.to_frame()['Date']
+    date_array_dt = [datetime.strptime(d,'%y%m%d') for d in date_array]
     for i,t in enumerate(df[colname]):
         if isinstance(t,str):
             if len(t) > 15:
@@ -404,11 +417,12 @@ def add_datetimecol(df, colname, timefmt='%H:%M:%S.%f'):
         else:
             datetime_arr.append(np.nan)
             print(t,df.index[i])
-    try:df[f'{colname}_dt'] = np.array(datetime_arr)
+    merged_date_array = [e.replace(year=d.year,month=d.month,day=d.day) for d,e in zip(date_array_dt,datetime_arr)]
+    try:df[f'{colname}_dt'] = np.array(merged_date_array)
     except:ValueError
 
 def align2eventScalar(df,pupilsize,pupiltimes, pupiloutliers,beh, dur, filters=('4pupil','b1','c1'), baseline=False,eventshift=0,
-                      outlierthresh=0.9,stdthresh=3,subset=None):
+                      outlierthresh=0.9,stdthresh=3,subset=None) -> pd.DataFrame:
 
     pupiltrace = pd.Series(pupilsize,index=pupiltimes)
     outlierstrace = pd.Series(pupiloutliers,index=pupiltimes)
@@ -418,6 +432,14 @@ def align2eventScalar(df,pupilsize,pupiltimes, pupiloutliers,beh, dur, filters=(
     dt=pupiltimes.diff().abs().mean().total_seconds()
     t_len = int(((dur[1]+dt)-dur[0])/dt)
     eventpupil_arr = np.full((filtered_df.shape[0],t_len),np.nan)  # int((np.abs(dur).sum()+rate) * 1/rate))
+
+    eventtimez = filtered_df[beh]
+    if len(eventtimez)==0:
+        return pd.DataFrame(np.array([]))
+    eventsess = filtered_df.index
+    eventdatez = [e[1] for e in eventsess]
+    eventnamez = [e[0] for e in eventsess]
+
     outliers = 0
     varied = 0
     # if eventshift != 0:
@@ -430,31 +452,37 @@ def align2eventScalar(df,pupilsize,pupiltimes, pupiloutliers,beh, dur, filters=(
         eventpupil = copy(pupiltrace.loc[eventtime + timedelta(0,dur[0]): eventtime + timedelta(0,dur[1])])
         eventoutliers = copy(outlierstrace.loc[eventtime + timedelta(0,dur[0]): eventtime + timedelta(0,dur[1])])
         # print((eventoutliers == 0.0).sum(),float(len(eventpupil)))
-        if (eventoutliers == 1.0).sum()/float(len(eventpupil)) > outlierthresh:
-            # print(f'pupil trace for trial {i} incompatible',(eventoutliers == 1).sum())
-            outliers += 1
-        elif eventpupil.abs().max() > stdthresh:
-            # print(f'pupil trace for trial {i} incompatible')
-            varied += 1
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            if (eventoutliers == 1.0).sum()/float(len(eventpupil)) > outlierthresh:
+                # print(f'pupil trace for trial {i} incompatible',(eventoutliers == 1).sum())
+                outliers += 1
+            elif eventpupil.abs().max() > stdthresh:
+                # print(f'pupil trace for trial {i} incompatible')
+                varied += 1
 
-        else:
-            # print('diff',eventpupil.loc[eventtime - 1-eventshift]-eventpupil.loc[eventtime + 1-eventshift])
-            if baseline:
-                baseline_dur = 1.0
-                baseline_mean = np.nanmean(eventpupil.loc[eventtime - timedelta(baseline_dur-eventshift):
-                                               eventtime + timedelta(eventshift)])
-                eventpupil = eventpupil - baseline_mean
-
+            else:
+                # print('diff',eventpupil.loc[eventtime - 1-eventshift]-eventpupil.loc[eventtime + 1-eventshift])
+                if baseline:
+                    baseline_dur = 1.0
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        baseline_mean = np.nanmean(eventpupil.loc[eventtime - timedelta(0,baseline_dur-eventshift):
+                                                   eventtime + timedelta(0,eventshift)])
+                        eventpupil = eventpupil - baseline_mean
+                    # eventpupil = (eventpupil-eventpupil.mean())/eventpupil.std()
             if len(eventpupil)>0:
                 zeropadded = np.full_like(eventpupil_arr[0],0.0)
                 try: zeropadded[:len(eventpupil)] = eventpupil
                 except ValueError:print('bad shape')
-                if zeropadded.size <10:
-                    print('something')
                 eventpupil_arr[i] = zeropadded
     # print(f'Outlier Trials:{outliers}\n Too high varinace trials:{varied}')
     # print(eventpupil_arr.shape)
-    nonans_eventpuil = eventpupil_arr[~np.isnan(eventpupil_arr).any(axis=1)]
+    index=pd.MultiIndex.from_tuples(list(zip(eventtimez,eventnamez,eventdatez)),names=['time','name','date'])
+    eventpupil_df = pd.DataFrame(eventpupil_arr)
+    eventpupil_df.index = index
+    nonans_eventpuil = eventpupil_df[~np.isnan(eventpupil_arr).any(axis=1)]
+
     if subset is not None:
         midpnt = nonans_eventpuil.shape[0]/2.0
         firsts = nonans_eventpuil[:subset,:]
@@ -464,8 +492,8 @@ def align2eventScalar(df,pupilsize,pupiltimes, pupiloutliers,beh, dur, filters=(
         return [firsts,middles,lasts]
     else:
         if nonans_eventpuil.size < 10:
-            print('something')
-        return nonans_eventpuil[:,:-1]
+            pass
+        return nonans_eventpuil.iloc[:,:-1]
 
 
 def getpatterntraces(data, patterntypes,beh,dur, eventshifts=None,baseline=True,subset=None,regressed=False,
@@ -502,60 +530,64 @@ def getpatterntraces(data, patterntypes,beh,dur, eventshifts=None,baseline=True,
                     pupil2use = data[name].pupilRegressed
                 else:
                     # pupil2use = data[name].pupildf['diameter_3d_ffilt']
-                    pupil2use = data.pupildf[pupilmetricname]
+                    pupil2use = data[name].pupildf[pupilmetricname]
 
                 td2use = data[name].trialData
                 times2use = pd.Series(data[name].pupildf.index)
-                outs2use = data[name].pupildf['confisout']
+                if 'dlc' in pupilmetricname:
+                    outs2use = data[name].pupildf['dlc_isout']
+                else:
+                    outs2use = data[name].pupildf['confisout']
         else:
             print('Incorrect data structure')
             name = None
         if isinstance(patternfilter,str):
             patternfilter = [patternfilter]
-        tone_aligned_pattern = align2eventScalar(td2use,pupil2use,times2use,
+        try:tone_aligned_pattern = align2eventScalar(td2use,pupil2use,times2use,
                                                  outs2use,beh,
                                                  dur,patternfilter,
-                                                 outlierthresh=0.9,stdthresh=4,
+                                                 outlierthresh=0.5,stdthresh=4,
                                                  eventshift=eventshifts[i],baseline=baseline,subset=subset)
+        except IndexError: print('broken')
         if subset is not None:
             firsts.append(tone_aligned_pattern[0])
             mids.append(tone_aligned_pattern[1])
             lasts.append(tone_aligned_pattern[2])
 
         else:
-            # if tone_aligned_pattern.size >10:
             _pattern_tonealigned.append(tone_aligned_pattern)
         if subset is not None:
             print('len subsests=',len(firsts),len(mids),len(lasts))
-            _pattern_tonealigned.append(np.concatenate(firsts,axis=0))
-            _pattern_tonealigned.append(np.concatenate(mids,axis=0))
-            _pattern_tonealigned.append(np.concatenate(lasts,axis=0))
+            _pattern_tonealigned.append(pd.concat(firsts,axis=0))
+            _pattern_tonealigned.append(pd.concat(mids,axis=0))
+            _pattern_tonealigned.append(pd.concat(lasts,axis=0))
 
-        list_eventaligned.append(np.concatenate(_pattern_tonealigned, axis=0))
+        list_eventaligned.append(pd.concat(_pattern_tonealigned, axis=0))
     return list_eventaligned
 
 
-def plot_eventaligned(eventdata_arr,eventnames,dur,beh,plotax=None,pltsize=(12,9),plotcols=None):
+def plot_eventaligned(eventdata_list, eventnames, dur, beh, plotax=None, pltsize=(12, 9), plotcols=None):
     if plotax is None:
         event_fig, event_ax = plt.subplots(1)
     else:
         event_fig, event_ax = plotax
     if plotcols is None:
-        plotcols = [f'C{i}' for i in range(len(eventdata_arr))]
-    print(f'length input lists {len(eventdata_arr)}')
-    for i, trace in enumerate(eventdata_arr):
-        tseries = np.linspace(dur[0], dur[1],eventdata_arr[i].shape[1])
+        plotcols = [f'C{i}' for i in range(len(eventdata_list))]
+    print(f'length input lists {len(eventdata_list)}')
+    for i, traces in enumerate(eventdata_list):
+        tseries = np.linspace(dur[0], dur[1], eventdata_list[i].shape[1])
         if eventnames[i] is not 'control':
-            event_ax.plot(tseries,np.nanmean(trace,axis=0), color=plotcols[i],
-                          label= f'{eventnames[i]}, {trace.shape[0]} Trials')
+            event_ax.plot(tseries,np.nanmean(traces,axis=0), color=plotcols[i],
+                          label= f'{eventnames[i]}, {traces.shape[0]} Trials')
         else:
-            event_ax.plot(tseries,np.nanmean(trace,axis=0), color='k',
-                                      label= f'{eventnames[i]}, {trace.shape[0]} Trials')
+            control_traces = traces.iloc[:,:]
+            event_ax.plot(tseries,np.nanmean(control_traces,axis=0), color='k',
+                                      label= f'{eventnames[i]}, {control_traces.shape[0]} Trials')
 
     # event_ax.axvline(0, c='k', linestyle='--')
     # event_ax.axvline(1, c='k', linestyle='--')
 
-        plotvar(trace,(event_fig,event_ax),tseries)
+        plotvar(traces,(event_fig,event_ax),tseries)
 
     if 'ToneTime' in beh:
         rect1 = matplotlib.patches.Rectangle((0, -10), 0.125, 20, linewidth=0, edgecolor='k', facecolor='k', alpha=0.1)
@@ -585,7 +617,8 @@ def plotvar(data,plot,timeseries):
 
 
 def align_wrapper(datadict,filters,align_beh, duration, alignshifts=None, plotsess=False, plotlabels=None,
-                  plottitle=None, xlabel=None,animal_labels=None,plotsave=False,coord=None):
+                  plottitle=None, xlabel=None,animal_labels=None,plotsave=False,coord=None,
+                  pupilmetricname='rawarea_zscored'):
     aligned_dict = dict()
     aligned_list = []
     sess_trials = {}
@@ -598,7 +631,7 @@ def align_wrapper(datadict,filters,align_beh, duration, alignshifts=None, plotse
     for sessix, sess in enumerate(datadict.keys()):
         aligned_dict[sess] = getpatterntraces(datadict[sess],filters,align_beh,duration,
                                               baseline=True, eventshifts=alignshifts,coord=coord,
-                                              pupilmetricname='rawarea_zscored')
+                                              pupilmetricname=pupilmetricname)
         sess_trials[sess] = [s.shape[0] for s in aligned_dict[sess]]
         if plotsess:
             sess_plot = plot_eventaligned(aligned_dict[sess],plotlabels,duration,plottitle)
@@ -615,7 +648,7 @@ def align_wrapper(datadict,filters,align_beh, duration, alignshifts=None, plotse
             if i == 0:
                 _array = copy(aligned_df.loc[sess][ptype])
             else:
-                _array = np.concatenate([_array, copy(aligned_df.loc[sess][ptype])], axis=0)
+                _array = pd.concat([_array, copy(aligned_df.loc[sess][ptype])], axis=0)
         aligned_list.append(_array)
     return aligned_list,aligned_df,sess_trials
 
@@ -750,3 +783,77 @@ def find_good_sessions(df,stage,n_critereon=100):
     gd_sessions_dates = [sess[1] for sess in gd_sessions]
 
     return gd_sessions, gd_sessions_names, gd_sessions_dates
+
+
+def pair_dir2sess(topdir,animals, year_limit=2022,subject='mouse'):
+    paired_dirs = {}
+    animals = [e.upper() for e in animals]
+    for folder in os.listdir(topdir):
+        if os.path.isdir(os.path.join(topdir,folder)):
+            abs_folder_path = os.path.join(topdir,folder)
+            folder_split = folder.split('_')
+            if folder_split[0].isnumeric():
+                if int(folder_split[0]) >= year_limit:
+                    for root,folder, file in os.walk(abs_folder_path):
+                        if root.split(os.sep)[-1].isnumeric():
+                                directory = root.split(os.sep)
+                                date = directory[-2]
+                                try:date_in_dt = datetime.strptime(date, '%Y_%m_%d')
+                                except ValueError:continue
+                                date_in_corstr = datetime.strftime(date_in_dt, '%y%m%d')
+                                # first make sure I am doing this within the recordings directory
+                                try:content = pd.read_csv(os.path.join(root, 'user_info.csv'), index_col=0)
+                                except pd.errors.ParserError or FileNotFoundError:
+                                    continue
+                                name_val = content['value']['name']
+                                if type(name_val) == str:
+                                    name_val = name_val.upper()
+                                    if name_val[:2].upper() == 'D0':
+                                        name_val = f'DO{name_val[2:]}'
+                                    if name_val.upper().lstrip() in animals:
+                                        # animal = content.value[0][-2:]#do46
+                                        animal = name_val.upper().lstrip()
+                                        if subject == 'human':
+                                            animal=animal.capitalize()
+                                        sess = f'{animal}_{date_in_corstr}'
+                                        if paired_dirs.get(sess,None) is None:
+                                            paired_dirs[sess] = root
+                                        else:
+                                            old_item = paired_dirs[sess]
+                                            if isinstance(old_item,list):
+                                                paired_dirs[sess] = old_item.append(root)
+                                            else:
+                                                paired_dirs[sess] = [old_item,root]
+
+    return paired_dirs
+
+
+def fit_elipse(point_array):
+    xc, yc, r1, r2 = cf.hyper_fit(point_array)
+
+    return (xc,yc), r1, r2
+
+
+def get_dlc_diams(df,n_frames):
+    bodypoints = np.array(df)
+    radii1_ = np.full(n_frames,np.nan)
+    radii2_ = np.full(n_frames,np.nan)
+    centersx_ = np.full(n_frames,np.nan)
+    centersy_ = np.full(n_frames,np.nan)
+
+    for i,row in enumerate(bodypoints[:n_frames,:]):
+        reshaped = row[0:24].reshape([8,3])
+        goodpoints = reshaped[reshaped[:,2]>.3].astype(float)
+        if goodpoints.shape[0] < 3:
+            radii1_[i] = np.nan
+            radii2_[i] = np.nan
+            centersx_[i] = np.nan
+            centersy_[i] = np.nan
+
+        else:
+            frame_elipse = fit_elipse(goodpoints[:,[0,1]])
+            radii1_[i] = frame_elipse[1]
+            radii2_[i] = frame_elipse[2]
+            centersx_[i] = frame_elipse[0][0]
+            centersy_[i] = frame_elipse[0][1]
+    return radii1_, radii2_, centersx_, centersy_
