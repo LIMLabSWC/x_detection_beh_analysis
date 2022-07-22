@@ -25,9 +25,10 @@ class TDAnalysis:
     Class for holding trialdata functions, dataframes, and plots
     """
 
-    def __init__(self, tdatadir, animal_list, daterange, type):
+    def __init__(self, tdatadir, animal_list, daterange, animal):
+        self.animal = animal
         plt.style.use("seaborn-white")
-        if type == 'human':
+        if self.animal == 'human':
             daterange = [sorted(daterange)[0], sorted(daterange)[-1]]
 
         self.trial_data = utils.merge_sessions(tdatadir,animal_list,'TrialData',daterange)
@@ -198,8 +199,9 @@ class TDAnalysis:
             daily_none_rate = []
             date_list = []
             trials_day = []
+
             for date in self.dates:
-                if self.type == 'mouse':
+                if self.animal == 'mouse':
                     if (utils.filter_df(data,['b1'])['ToneTime_dt'] != datetime.strptime('00:00:00','%H:%M:%S')).any():
                         #or if human
                         try:
@@ -327,94 +329,121 @@ class TDAnalysis:
     def since_pattern(self):
         # add column to dataframe that involves the time duration between patten presentation and x presentation
         c_map = mpl.cm.get_cmap('Paired')
-        color = c_map(np.random.choice(range(0, 9), 3, replace=False))
-        if type == 'mouse':
-            data = pd.DataFrame(utils.filter_df(self.trial_data, ['b1','e!0'])) # only need main-sess trials where pattern is presented
-        if type =='human':
-            data = pd.DataFrame(utils.filter_df(self.trial_data, ['e!0']))  # only need trials where pattern is presented
-        df = data.drop(columns=[
-            'Stim1_Amplitude', 'GoTone_Amplitude', "WarmUp", "RewardTone_Time", "Gap_Time", 'ToneTime', 'Trial_End',
-            'Trial_Start', 'InterTrial_Duration', 'Tone_Position', 'N_TonesPlayed', 'Withdraw_WaitTime',
-            'RewardLED_Duration', 'GapTone_Amplitude', 'Response_Window', 'Session_Block'])
-        data2 = pd.DataFrame(
-            utils.filter_df(self.trial_data, ['b1', 'e=0']))  # main-sess trials where pattern is not presented
-        df2 = data2.drop(
-            columns=['Stim1_Amplitude', 'GoTone_Amplitude', "WarmUp", "RewardTone_Time", "Gap_Time", 'ToneTime',
-                     'Trial_End', 'Trial_Start'])
-        df['Trial_Outcome'].replace(-1,0, inplace=True)
-        df2['Trial_Outcome'].replace(-1, 0, inplace=True)
-        count_fail = len(df[df['Trial_Outcome'] == 0])
+        color = c_map(np.random.choice(range(0, 9), 4, replace=False))
+        data = self.trial_data
+        if self.animal == 'mouse':
+            df = pd.DataFrame(utils.filter_df(self.trial_data, ['b1','e!0'])) # only need main-sess trials where pattern is presented
+            df2 = pd.DataFrame(utils.filter_df(self.trial_data, ['b1','e=0']))
+        if self.animal =='human':
+            df = pd.DataFrame(utils.filter_df(self.trial_data, ['e!0']))  # only need trials where pattern is presented
+            df2 = pd.DataFrame(utils.filter_df(self.trial_data, ['e=0']))  # main-sess trials where pattern is not presented
+        #df2 = data2.drop(columns=['Stim1_Amplitude', 'GoTone_Amplitude', "WarmUp", "RewardTone_Time", "Gap_Time", 'ToneTime', 'Trial_End', 'Trial_Start'])
+        #df['Trial_Outcome'].replace(-1,0, inplace=True)
+        #df2['Trial_Outcome'].replace(-1, 0, inplace=True)
+        count_miss = len(df[df['Trial_Outcome'] == 0])
+        count_early = len(df[df['Trial_Outcome'] == -1])
         count_correct = len(df[df['Trial_Outcome'] == 1])
-        percent_fail = count_fail / (count_fail  + count_correct)
-        print("percentage fail", percent_fail * 100)
-        percent_correct = count_correct / (count_fail + count_correct)
-        print("percentage correct", percent_correct * 100)
-        #pd.crosstab(df.Reward_Amount, df.Trial_Outcome).plot(kind='bar')
-        #plt.xlabel('Reward amount')
-        #plt.ylabel('Frequency')
-        #pd.crosstab(df.PatternPresentation_Rate, df.Trial_Outcome).plot(kind='bar')
-        #plt.xlabel('PatternPresentation_Rate')
-        #plt.ylabel('Frequency')
-        #pd.crosstab(df.PostTone_Duration, df.Trial_Outcome).plot(kind='bar')
-        #plt.xlabel('PostTone_Duration')
-        #plt.ylabel('Frequency')
+        percent_fail = (count_miss + count_early / (count_early + count_miss + count_correct))*100
+        print("percentage fail", percent_fail)
+        percent_correct = (count_correct / (count_miss + count_early + count_correct)) *100
+        print("percentage correct", percent_correct)
+        if self.animal == 'mouse':
+            pd.crosstab(df.Reward_Amount, df.Trial_Outcome).plot(kind='bar',color=['orange','aquamarine','lightblue'])
+            plt.xlabel('Reward amount')
+            plt.ylabel('Frequency')
 
-        #table = pd.crosstab(df.PostTone_Duration, df.Trial_Outcome)
-        #table.div(table.sum(1).astype(float), axis=0).plot(kind='bar', stacked=True, color=[color[1], color[2]])
-        #plt.title('PostTone_Duration vs Trial_Outcome')
-        #plt.xlabel('PostTone_Duration')
-        #plt.ylabel('Proportion trials')
+        """
+        pd.crosstab(data.PatternPresentation_Rate, data.Trial_Outcome).plot(kind='bar')
+        plt.xlabel('PatternPresentation_Rate')
+        plt.ylabel('Frequency')
+        plt.title('Performance depending on pattern presentation rate')
+
+        table = pd.crosstab(data.PatternPresentation_Rate, data.Trial_Outcome)
+        table.div(table.sum(1).astype(float), axis=0).plot(kind='bar', stacked=True)
+        plt.title('Performance depending on pattern presentation rate')
+        plt.xlabel('PatternPresentation_Rate')
+        plt.ylabel('Proportion trials')
+
+
+        pd.crosstab(data.PostTone_Duration, data.Trial_Outcome).plot(kind='bar',color=['orange','aquamarine','lightblue'])
+        plt.xlabel('PostTone_Duration')
+        plt.ylabel('Frequency')
+        plt.title('Performance depending on time from pattern to X with or without an actual pattern')
+
+
+        pd.crosstab(df.PostTone_Duration, df.Trial_Outcome).plot(kind='bar',color=['orange', 'aquamarine', 'lightblue'])
+        plt.xlabel('PostTone_Duration')
+        plt.ylabel('Frequency')
+        plt.title('Performance depending on time from pattern to X when pattern was played')
+
+        table = pd.crosstab(df2.PostTone_Duration, df2.Trial_Outcome)
+        print(stats.chi2_contingency(table))
+        table.div(table.sum(1).astype(float), axis=0).plot(kind='bar', stacked=True,color=['orange', 'aquamarine', 'lightblue'])
+        plt.title('PostTone_Duration vs Trial_Outcome - no pattern')
+        plt.xlabel('PostTone_Duration')
+        plt.ylabel('Proportion trials')
+        plt.title('Performance depending on time from pattern to X when pattern was not played')
+
+        table = pd.crosstab(df.PostTone_Duration, df.Trial_Outcome)
+        print(stats.chi2_contingency(table))
+        table.div(table.sum(1).astype(float), axis=0).plot(kind='bar', stacked=True, color=['orange','aquamarine','lightblue'])
+        plt.title('PostTone_Duration vs Trial_Outcome - Pattern')
+        plt.xlabel('PostTone_Duration')
+        plt.ylabel('Proportion trials')
+        plt.title('Performance depending on time from pattern to X when pattern was played')
 
         table = pd.crosstab(df.Stim1_Duration, df.Trial_Outcome)
-        table.div(table.sum(1).astype(float), axis=0).plot(kind='bar', stacked=True, color=(color[1], color[2]))
+        print(stats.chi2_contingency(table))
+        table.div(table.sum(1).astype(float), axis=0).plot(kind='bar', stacked=True, color=['aquamarine','orange','yellow'])
         plt.title('Stim1_Duration vs Trial_Outcome')
         plt.xlabel('Stim1_Duration')
         plt.ylabel('Proportion trials')
 
-        #table = pd.crosstab(df2.PostTone_Duration, df2.Trial_Outcome)
-        #table.div(table.sum(1).astype(float), axis=0).plot(kind='bar', stacked=True, color=[color[1], color[2]])
-        #plt.title('PostTone_Duration vs Trial_Outcome - no pattern')
-        #plt.xlabel('PostTone_Duration')
-        #plt.ylabel('Proportion trials')
 
-        #table = pd.crosstab(df.Reward_Amount, df.Trial_Outcome)
-        #table.div(table.sum(1).astype(float), axis=0).plot(kind='bar', stacked=True)
-        #plt.title('Reward_Amount vs Trial_Outcome - no pattern')
-        #plt.xlabel('Reward_Amount')
-        #plt.ylabel('Proportion trials')
+        if self.animal == 'mouse':
+            table = pd.crosstab(df.Reward_Amount, df.Trial_Outcome)
+            table.div(table.sum(1).astype(float), axis=0).plot(kind='bar', stacked=True)
+            plt.title('Reward_Amount vs Trial_Outcome - no pattern')
+            plt.xlabel('Reward_Amount')
+            plt.ylabel('Proportion trials')
 
+        """
         #axes = pd.plotting.scatter_matrix(df, alpha=0.2)
         #plt.tight_layout()
 
         #sns.catplot(x='Trial_Outcome', y='PostTone_Duration',  data=df)
-
-        durations = sorted(df['PostTone_Duration'].unique())
-        values = df['PostTone_Duration'].value_counts()
-        rate_value_pattern = []
-        rate_value_none = []
-        total_none_list = []
-        total_pattern_list = []
-        for i in durations:
-            success_pattern = utils.filter_df(df.loc[df['PostTone_Duration'] == i], ['a1']).shape[0]
-            total_pattern = (df.loc[df['PostTone_Duration'] == i]).shape[0]
-            success_none = utils.filter_df(df2.loc[df2['PostTone_Duration'] == i], ['a1']).shape[0]
-            total_none = (df2.loc[df2['PostTone_Duration'] == i]).shape[0]
-            rate_value_pattern.append(success_pattern/total_pattern)
-            rate_value_none.append(success_none/total_none)
-            total_none_list.append(total_none)
-            total_pattern_list.append(total_pattern)
+        color = c_map(np.random.choice(range(0, 9), len(self.animals), replace=False))
         fig, ax = plt.subplots()
-        colors = ['grey' ,np.array(color[0])]
-        string_durations = [str(i) for i in durations]
-        rate_dict = {'pattern': rate_value_pattern, 'no pattern': rate_value_none}
-        for i, key in enumerate(rate_dict):
-            ax.scatter(durations, rate_dict[key], c=colors[i])
-        for t, time in enumerate(durations):
-            ax.text(time+0.1, rate_dict['pattern'][t], f'n:{values[time]}', fontsize='small')
-        ax.legend(rate_dict)
-        ax.set_title('Correct rate for different post tone durations')
-        ax.set_xticks(durations)
-        #ax.scatter(string_durations, rate_value_none, label = 'no pattern')
+        for date in self.dates:
+            for a, animal in enumerate(self.animals):
+                animal_df = df.loc[animal, date]
+                animal_df2 = df2.loc[animal, date]
+                durations = sorted(animal_df['PostTone_Duration'].unique())
+                values = animal_df['PostTone_Duration'].value_counts()
+                rate_value_pattern = []
+                rate_value_none = []
+                total_none_list = []
+                total_pattern_list = []
+                for i in durations:
+                    success_pattern = utils.filter_df(animal_df.loc[animal_df['PostTone_Duration'] == i], ['a1']).shape[0]
+                    total_pattern = (animal_df.loc[animal_df['PostTone_Duration'] == i]).shape[0]
+                    success_none = utils.filter_df(animal_df2.loc[animal_df2['PostTone_Duration'] == i], ['a1']).shape[0]
+                    total_none = (animal_df2.loc[animal_df2['PostTone_Duration'] == i]).shape[0]
+                    rate_value_pattern.append(success_pattern/total_pattern)
+                    rate_value_none.append(success_none/total_none)
+                    total_none_list.append(total_none)
+                    total_pattern_list.append(total_pattern)
+                colors = ['grey' ,np.array(color[a])]
+                string_durations = [str(i) for i in durations]
+                rate_dict = {'pattern': rate_value_pattern, 'no pattern': rate_value_none}
+                for i, key in enumerate(rate_dict):
+                    ax.scatter(durations, rate_dict[key], c=colors[i])
+                for t, time in enumerate(durations):
+                    ax.text(time+0.1, rate_dict['pattern'][t], f'n:{values[time]}', fontsize='small')
+                ax.legend(rate_dict)
+                ax.set_title('Correct rate for different post tone durations')
+                ax.set_xticks(durations)
+                #ax.scatter(string_durations, rate_value_none, label = 'no pattern')
 
 
         plt.show()
@@ -429,10 +458,8 @@ class TDAnalysis:
         #from sklearn.linear_model import LogisticRegression
         #from sklearn.model_selection import train_test_split
 
-
-
-
-
+    def experiments(self):
+        return('nothing')
 
 if __name__ == '__main__':
     plt.rcParams["figure.figsize"] = [8.00, 6.00]
@@ -442,15 +469,18 @@ if __name__ == '__main__':
     datadir = '/Users/hildelt/SWC_project/data'
     animals = [ 'DO45', 'DO46', 'DO47', 'DO48']
     #animals = [f'Human{i}' for i in range(28,32)]
-
+    species = 'mouse'
     dates = ['14/06/2022', 'now']  # start/end date for analysis
-    td_obj = TDAnalysis(datadir,animals,dates, type='human')#type = mouse or human
+    #dates = ['220518', '220523', '220524','220530']
+
+    td_obj = TDAnalysis(datadir,animals,dates,species)#type = mouse or human
     #td_obj.day2day = td_obj.beh_daily(True)
     #td_obj.warmup_vs_main = td_obj.warmup()
     #td_obj.pattern_response = td_obj.pattern(stage ='stage4')
     #td_obj.pattern_response = td_obj.pattern(stage ='stage3')#needs a string defining the stage refering to utils.filtr_df() function
     #td_obj.session = td_obj.first_vs_second()
     td_obj.time_since = td_obj.since_pattern()
+    #td_obj.general = td_obj.experiments()
     plt.show()
 
     # top rig:

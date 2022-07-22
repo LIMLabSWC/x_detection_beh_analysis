@@ -404,17 +404,19 @@ class Main:
     # max_diffs_arr = np.array(max_diffs_list)
     # # plt.plot(max_diffs_arr[:,0])
     # plt.plot(max_diffs_arr[:,1])
+
 if __name__ == "__main__":
     # pkl2use = r'pickles\human_familiarity_3d_200Hz_015Shan_driftcorr_hpass01.pkl'
     # pkl2use = r'pickles\human_class1_3d_200Hz_015Shan_driftcorr_hpass01_no29.pkl'
     # pkl2use = r'pickles\human_class1_3d_200Hz_015Shan_driftcorr_hpass01.pkl'
     # pkl2use = r'pickles\DO48_fam_2d_200Hz_015Shan_driftcorr_hpass01.pkl'
-    pkl2use = r'pickles\mouse_normdev_2d_200Hz_015Shan_driftcorr_hpass04_wdlc.pkl'
+    # pkl2use = r'pickles\mouse_normdev_2d_200Hz_015Shan_driftcorr_hpass04_wdlc.pkl'
     # pkl2use = r'pickles\mouse_fam_2d_200Hz_015Shan_driftcorr_hpass04_wdlc.pkl'
+    pkl2use = r'/Volumes/akrami/mouse_pupillometry/pickles/DO48_fam_3d_200Hz_015Shan_driftcorr_hpass01_wdlc.pkl'
 
     run = Main(pkl2use, (-1,3))
-    paradigm = ['altvsrand','normdev']
-    # paradigm = ['familiarity']
+    #paradigm = ['altvsrand','normdev']
+    paradigm = ['familiarity']
 
     if 'familiarity' in paradigm:  # analysis to run for familiarity paradigm
         run.familiarity = run.get_aligned([['e!0','plow','tones4'],['e!0','tones4','pmed'],
@@ -462,7 +464,7 @@ if __name__ == "__main__":
             fig.set_tight_layout(True)
 
     if 'normdev' in paradigm:
-        run.normdev = run.get_aligned([['e!0','s3','d0','tones4'],['e!0','s3','d4','tones4']],
+        run.normdev = run.get_aligned([['e!0','s3','d0','tones4'],['e!0','s3','d4','tones4']], #line629 in utils
                                       viol_shift=[0.0],
                                       event='ToneTime',xlabel='Time since pattern onset', pdr=False,
                                       plotlabels=['normal','deviant'],plotsess=True,

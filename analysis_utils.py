@@ -626,7 +626,7 @@ def align_wrapper(datadict,filters,align_beh, duration, alignshifts=None, plotse
         if all([plotlabels,plottitle,xlabel,animal_labels]):
             pass
         else:
-            print('No plot labels or plot title given for plot. Aborting')
+            print('No plot labels or plot title given for plot. Aborting') #ValueError: The truth value of an array with more than one element is ambiguous. Use a.any() or a.all()
             return None
     for sessix, sess in enumerate(datadict.keys()):
         aligned_dict[sess] = getpatterntraces(datadict[sess],filters,align_beh,duration,

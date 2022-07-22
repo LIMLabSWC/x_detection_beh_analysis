@@ -157,7 +157,8 @@ class Main:
 
 
 if __name__ == "__main__":
-    tdatadir = r'C:\bonsai\data\Hilde'
+    #tdatadir = r'C:\bonsai\data\Hilde'
+    tdatadir = 'Users/hildelt/SWC_project/data/Hilde'
     #
     # humans = [f'Human{i}' for i in range(16,28)]
     # humandates = ['220208','220209','220210','220215',
@@ -172,7 +173,7 @@ if __name__ == "__main__":
     #     humandates.remove('220523')
 
     # han_size = 1
-    run = Main(humans,humandates,r'pickles\human_class1_3d_200Hz_015Shan_driftcorr_hpass01.pkl',tdatadir,r'W:\humanpsychophysics\HumanXDetection\Data',
+    run = Main(humans,humandates,'/Users/hildelt/Documents/Thesis/gd_analysis/pickles/human_class1_3d_200Hz_015Shan_driftcorr_hpass01.pkl',tdatadir,'/Volumes/akrami/humanpsychophysics/HumanXDetection/Data',
                'pupildata_3d',200.0,han_size=.15,hpass=0.1,aligneddir='aligned_class1')
     run.load_pdata()
     # plt.plot(run.data['Human21_220316'].pupildf['rawarea_zscored'])
