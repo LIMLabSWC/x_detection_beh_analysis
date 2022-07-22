@@ -182,7 +182,6 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         's0': ['Session_Block',0],
         's1': ['Session_Block',1],
         's2': ['Session_Block',2],
-        's2': ['Session_Block',2],
         's3': ['Session_Block',3],
         'sess_a': ['Session', 'a'],
         'sess_b': ['Session', 'b'],
@@ -706,7 +705,8 @@ def format_timestr(timestr_series) -> (pd.Series, pd.Series):
     """
     s=timestr_series
     before = time.time()
-    formatted=s.where(s.apply(lambda e: len(e.split(':')[-1]))>3,s.apply(lambda e: f'{e}.0'))
+    try:formatted=s.where(s.apply(lambda e: len(e.split(':')[-1]))>3,s.apply(lambda e: f'{e}.0'))
+    except AttributeError: print('bad time')
     dt_series = [datetime.strptime(e,'%H:%M:%S.%f') for e in formatted]
     return formatted, dt_series
 
