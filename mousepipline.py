@@ -8,7 +8,7 @@ import numpy as np
 from scipy.stats import zscore
 import scipy.signal
 import time
-from pupilpipeline import Main as Main
+from PupilProcessing.pupilpipeline import Main as Main
 
 
 if __name__ == "__main__":
