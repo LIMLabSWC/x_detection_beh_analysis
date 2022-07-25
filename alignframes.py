@@ -49,7 +49,7 @@ def findfiles(startdir,filetype,datadict,animals=None,dates=None):
             if file.find(filetype) != -1:
                 splitstr = file.split('_')
                 _animal = splitstr[0]
-                _date = splitstr[1]
+                _date = splitstr[2]
                 if dates is None:
                     if _date not in datadict[_animal].keys():
                         datadict[_animal][_date] = dict()

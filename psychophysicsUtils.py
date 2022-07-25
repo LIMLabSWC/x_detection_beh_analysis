@@ -23,7 +23,7 @@ import scipy.signal
 from copy import copy
 
 
-# plt.style.use("seaborn")
+plt.style.use("seaborn-muted")
 # rcParams['figure.dpi']= 300
 # rcParams['axes.labelsize']=5
 # rcParams['axes.labelpad']=2
@@ -67,7 +67,8 @@ Returns
 
 
 def scalarTime(strTime): # strTime of form 'HH:MM:SS:msmsmsmsms.....'
-	hours = int(strTime[0:2])*60*60
+	try:hours = int(strTime[0:2])*60*60
+	except TypeError: print('blah')
 	minutes = int(strTime[3:5])*60
 	seconds = int(strTime[6:8])
 	milliseconds = float('0.'+strTime[9:])
@@ -1367,7 +1368,7 @@ def interpolatepupil(dataSeries, gapExtension = 0.2) ->pd.Series:
 
 
 def removeouts(dataseries, n_speed=2.5, n_size=2.5, plotHist=False): #following Leys et al 2013
-	print("Removing speed outliers", end="")
+	print("Removing speed outliers", end="\n")
 	size = dataseries
 	timeseries = pd.Series(dataseries.index)
 	absspeed = timeseries.diff().abs()
@@ -1375,11 +1376,12 @@ def removeouts(dataseries, n_speed=2.5, n_size=2.5, plotHist=False): #following 
 	absSpeed = size.diff().abs()/dt
 
 	MAD_speed = np.nanmedian(np.abs(absSpeed - absSpeed.median()))
-	MAD_size = np.median(np.abs(size - size.median()))
+	MAD_size = np.nanmedian(np.abs(size - size.median()))
 	threshold_speed_low = 0  # abs(absSpeed.median() - n_speed*MAD_speed)
 	threshold_size_low = size.median() - n_size*MAD_size
 	threshold_speed_high = absSpeed.median() + n_speed*MAD_speed
 	threshold_size_high = size.median() + n_size*MAD_size
+	print(f'thresh low/ high: {threshold_size_low, threshold_size_high}')
 
 	# data = data * (absSpeed<threshold_speed_high)  #  * (absSpeed>=threshold_speed_low)
 	# print(" (%.2f%%) " %(100*(1-np.sum((absSpeed<threshold_speed_high) * (absSpeed>threshold_speed_low))/len(data))),end="")
