@@ -16,6 +16,9 @@ dist/
 # Log files
 *.log
 
+# Large pickle files
+*.pkl
+
 # Package files
 *.jar
 

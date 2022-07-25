@@ -22,7 +22,9 @@ def merge_sessions(datadir,animal_list,filestr_cond, datestr_format='%y%m%d'):
         if filestr_cond == 'SummaryData' or filestr_cond == 'params':
             for file in files:
                 if file.find(filestr_cond) != -1:
-                    session_date = file[-11:-5]
+                    filename_parts = file.split('_')
+                    animal_name = filename_parts[0]
+                    session_date = filename_parts[2]
                     loaded_file = pd.read_csv(os.path.join(root,file), delimiter=',')
                     if loaded_file['Name'][0] in animal_list \
                             and datetime.strptime(date_range[0], '%d/%m/%Y') <= datetime.strptime(session_date,datestr_format)\
@@ -33,8 +35,9 @@ def merge_sessions(datadir,animal_list,filestr_cond, datestr_format='%y%m%d'):
         elif filestr_cond == 'TrialData':
             for file in files:
                 if file.find(filestr_cond) != -1:
-                    animal_name = file[0:4]
-                    session_date = file[-11:-5]
+                    filename_parts = file.split('_')
+                    animal_name = filename_parts[0]
+                    session_date = filename_parts[2]
                     if animal_name in animal_list \
                             and datetime.strptime(date_range[0], '%d/%m/%Y') <= datetime.strptime(session_date,datestr_format)\
                             <= datetime.strptime(date_range[1], '%d/%m/%Y'):

@@ -1,0 +1,3 @@
+file '/mnt/w/mouse_pupillometry/5_26_2021/H17_M7_S17/crop/sessionvid.avi' 
+file '/mnt/w/mouse_pupillometry/5_26_2021/H17_M13_S4/crop/sessionvid.avi' 
+ 

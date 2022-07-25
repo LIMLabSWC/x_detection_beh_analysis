@@ -72,7 +72,7 @@ class TDAnalysis:
                     for f, feature in enumerate(stats_dict[animal][d]):
                         if i is 0:
                             ax[f].scatter(self.dates,np.full_like(self.dates,0),facecolors='none',edgecolor='none',s=15)
-                        ax[f].scatter(d, stats_dict[animal][d][feature], marker='o',facecolors='none',
+                        ax[f].scatter(d, stats_dict[animal][d][feature], marker='o', facecolors=f'C{i}',
                                       edgecolor=f'C{i}',
                                       label=animal, s=30)
                         if i == 0:
@@ -83,18 +83,24 @@ class TDAnalysis:
             #     by_label = OrderedDict(zip(labels, handles))
             #     # axis.legend(by_label.values(), by_label.keys())
 
-
+            by_label = OrderedDict(zip(labels, handles))
+            ax[0].legend(by_label.values(), by_label.keys(),fontsize='medium',ncol=len(self.animals),
+                         bbox_to_anchor=(0.5, 1.01),loc='lower center')
+            # fig.legend(by_label.values(), by_label.keys())
+            fig.set_tight_layout(True)
+            # fig.set_size_inches(18, 12)
+            fig.set_size_inches(9, 12)
             for axis in ax:
                 xmin, xmax = axis.get_xlim()
                 ymin, ymax = axis.get_ylim()
+                if ymax > 1:
+                    axis.set_yticks(np.arange(0,ymax,50))
+                    axis.set_yticklabels(np.arange(0,ymax,50).astype(int))
+                elif ymax <= 1:
+                    axis.set_yticks(np.arange(0,1,.25))
+                    axis.set_yticklabels(np.arange(0,1,.25))
                 # axis.set_xlim(xmin - 0.01, xmax+0.01)
                 # axis.set_ylim(ymin - 0.1, ymax+ymax*.1)
-
-            by_label = OrderedDict(zip(labels, handles))
-            ax[0].legend(by_label.values(), by_label.keys(),loc=1,fontsize='medium',ncol=len(self.animals))
-            # fig.legend(by_label.values(), by_label.keys())
-            fig.set_tight_layout(True)
-            fig.set_size_inches(18, 12)
             tick_dates = []
             for animal in self.animals:
                 tick_dates.extend(stats_dict[animal].keys())
@@ -115,6 +121,6 @@ if __name__ == '__main__':
                 'DO48'
                ]
 
-    dates = ['17/03/2022', 'now']  # start/end date for analysis
+    dates = ['13/06/2022', 'now']  # start/end date for analysis
     td_obj = TDAnalysis(datadir,animals,dates)
     td_obj.day2day = td_obj.beh_daily(True)
