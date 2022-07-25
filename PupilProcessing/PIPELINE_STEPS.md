@@ -3,7 +3,7 @@
 This is a subdirectory containing classes and run code for process pupil data recorded with the pupil labs software
 Aim: Get pupil video/output, return uniformly sampled filtered and interpolated pupil dataframe
 
-## 1: **Extract formatted pupil data**
+## 1: Extract formatted pupil data
 Step 1 takes either a session folder from pupil labs - "c:\recordings\000"  - or a video with timestamps and outputs formatted dataframe with pupil labs detection results.
 Dataframe fields ("eye_id","timestamp","topic","confidence","diameter_2d [px]","diameter_3d [mm]","2d_radii","2d_centre") for each frame. 
 
@@ -23,9 +23,9 @@ Bodypoint coordiantes (.h5 files) and labelled videos generated using `analyze_v
 ## 2: Align and convert pupil timestamps to behavioural time 
 
 `align_pupils.py`: Reformats extracted pupils outputs to Bonsai time using timesync file. Corrects for drift caused by different clock speaeds  
-Give top directory. Script will find *extracted_pupils* tagged csv files in subdirectories. Valid_sessions used given by find_good_session(_*stage*,*trial threshold*)  
+Give top directory. Script will find **extracted_pupils** tagged csv files in subdirectories. Valid_sessions used given by find_good_session(_**stage**,**trial threshold**)  
 Scipt will also merge multiple sessions taken on the same day by same animal
-Saves csv file in specified `aligned_dir` tagged *_pupil_data* for 2d and 3d detectors for each session
+Saves csv file in specified `aligned_dir` tagged **_pupil_data** for 2d and 3d detectors for each session
 
 ## 3: Processing aligned session pupil data + session behaviour data
 `pupilpipeline.py` contains class Main. `Main.load_pdata()` loads, processes aligned pupil labed detected diameters and deeplabcut pupildiamters.
