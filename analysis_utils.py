@@ -191,6 +191,7 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         'stage2': ['Stage', 2],
         'stage3': ['Stage',3],
         'stage4': ['Stage', 4],
+        'stage5': ['Stage', 5]
     }
 
     df2filter = data_df
