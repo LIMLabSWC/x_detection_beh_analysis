@@ -62,7 +62,6 @@ class Main:
             self.paireddirs = utils.pair_dir2sess(os.path.split(self.pdir)[0],self.animals)
         else:
             self.paireddirs = utils.pair_dir2sess(self.pdir,self.animals,subject=self.subjecttype)
-        print(self.paireddirs.keys())
         self.dlc_snapshot = dlc_snapshot
 
     def get_outliers(self,rawx,rawy,rawsize,rawdiameter,confidence=None) -> (np.ndarray,np.ndarray):
@@ -89,9 +88,17 @@ class Main:
         if not os.path.isdir(figdir):
             os.mkdir(figdir)
         if os.path.exists(self.pklname) and self.overwrite is False:
+            self.data = dict()
             with open(self.pklname,'rb') as pklfile:
                 print('Loading existing data')
-                self.data = pickle.load(pklfile)
+                while True:
+                    try:
+                        y = (pickle.load(pklfile))
+                        z = {**self.data, **y}
+                        self.data = z
+                    except EOFError:
+                        print(f'end of file {self.data.keys()}')
+                        break
         elif os.path.exists(self.pklname) is False or self.overwrite is True:
             self.data = dict()
         for animal, date in zip(self.animals, self.dates):
@@ -218,8 +225,11 @@ class Main:
                         pupil_uni[f'{col2norm}_zscored'] = zscore(pupil_uni[f'{col2norm}_ffilt'])
 
                     try:
+                        df_cols = pupil_uni.columns
+                        cols2use_ix = ['timestamp' in e or 'zscored' in e or 'out' in e for e in df_cols]
+                        cols2use =df_cols[cols2use_ix]
                         session_TD = self.trial_data.loc[animal, date].copy()
-                        self.data[name].pupildf = pupil_uni
+                        self.data[name].pupildf = pupil_uni[cols2use]
                     except KeyError:
                         print(f'KeyError for session {animal,date}')
                         continue
