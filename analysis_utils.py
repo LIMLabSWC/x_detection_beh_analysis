@@ -145,25 +145,25 @@ def filter_df(data_df, filters) -> pd.DataFrame:
     all_dates_t0 = [datetime.strptime(e,'%y%m%d') for e in all_dates]
 
     fildict = {
-        'a0': ['Trial_Outcome', 0],
-        'a1': ['Trial_Outcome', 1],
-        'a2': ['Trial_Outcome', -1],
-        'a3': ['Trial_Outcome', -1, '!='],
+        'a0': ['Trial_Outcome', 0], # miss
+        'a1': ['Trial_Outcome', 1], # correct
+        'a2': ['Trial_Outcome', -1], # early
+        'a3': ['Trial_Outcome', -1, '!='], # fail, miss or early
         'b0': ['WarmUp', True],
         'b1': ['WarmUp', False],
-        'c0': ['Tone_Position', 0],
-        'c1': ['Tone_Position', 1],
-        'd0': ['Pattern_Type', 0],
-        'd!0': ['Pattern_Type', 0, '>'],
-        'd-1': ['Pattern_Type', -1],
-        'd1': ['Pattern_Type', 1],
-        'd2': ['Pattern_Type', 2],
-        'd3': ['Pattern_Type', 3],
-        'd4': ['Pattern_Type', [1,3]],
-        'e!0': ['ToneTime_dt',all_dates_t0,'notin'],
-        'e=0': ['ToneTime_dt',all_dates_t0,'isin'],
+        'c0': ['Tone_Position', 0], # Tone coming before X
+        'c1': ['Tone_Position', 1], # Tone coming after X
+        'd0': ['Pattern_Type', 0], # Normal pattern
+        'd!0': ['Pattern_Type', 0, '>'], # deviant pattern
+        'd-1': ['Pattern_Type', -1], #
+        'd1': ['Pattern_Type', 1], #
+        'd2': ['Pattern_Type', 2], #
+        'd3': ['Pattern_Type', 3], #
+        'd4': ['Pattern_Type', [1,3]], #
+        'e!0': ['ToneTime_dt',all_dates_t0,'notin'], #There was a tone, if 'c0'
+        'e=0': ['ToneTime_dt',all_dates_t0,'isin'], # There was no tone
         '4pupil': ['na'],
-        'devrep':['PatternID',dev_repeat,'isin'],
+        'devrep':['PatternID',dev_repeat,'isin'], #
         'devord': ['PatternID', dev_nonorder, 'isin'],
         'devassc': ['PatternID', dev_assc, 'isin'],
         'devdesc': ['PatternID', dev_desc, 'isin'],
@@ -174,7 +174,7 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         'pmed': ['PatternPresentation_Rate',0.6],
         'phigh': ['PatternPresentation_Rate',0.1],
         'ppost': ['PatternPresentation_Rate',0.4],
-        'tones4': ['N_TonesPlayed',4],
+        'tones4': ['N_TonesPlayed',4], #how many tones of the pattern was presented
         'tones3': ['N_TonesPlayed',3],
         'tones2': ['N_TonesPlayed',2],
         'tones1': ['N_TonesPlayed',1],
@@ -183,15 +183,17 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         's1': ['Session_Block',1],
         's01': ['Session_Block',[0,1]],
         's2': ['Session_Block',2],
-        's3': ['Session_Block',3],
+        's3': ['Session_Block',3], # session block in which deviants are presented
         'sess_a': ['Session', 'a'],
-        'sess_b': ['Session', 'b'],
+        'sess_b': ['Session', 'b'], # if there are more than one session in one day per animal
         'stage0': ['Stage', 0],
         'stage1': ['Stage', 1],
-        'stage2': ['Stage', 2],
-        'stage3': ['Stage',3],
-        'stage4': ['Stage', 4],
-        'stage5': ['Stage', 5]
+        'stage2': ['Stage', 2], # training
+        'stage3': ['Stage',3], # familiarity
+        'stage4': ['Stage', 4], # norm-dev
+        'stage5': ['Stage', 5], # continous norm-dev
+        'stage6': ['Stage', 6]# continous switch
+        #different start frequencies?
     }
 
     df2filter = data_df
@@ -503,8 +505,9 @@ def getpatterntraces(data, patterntypes,beh,dur, eventshifts=None,baseline=True,
     if eventshifts is None:
         eventshifts = np.zeros(len(patterntypes))
     for i, patternfilter in enumerate(patterntypes):
-        if 'e=0' in patternfilter:
-            beh = 'Pretone_end_dt'
+        if beh == 'ToneTime_dt':
+            if 'e=0' in patternfilter:
+                beh = 'Pretone_end_dt'
         _pattern_tonealigned = []
         if subset is not None:
             firsts, mids, lasts = [], [], []
