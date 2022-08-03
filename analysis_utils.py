@@ -523,7 +523,7 @@ def getpatterntraces(data, patterntypes,beh,dur, eventshifts=None,baseline=True,
                 td2use = data.trialData
             else: return None
             times2use = pd.Series(data.pupildf.index)
-            outs2use = data.pupildf['confisout']
+            outs2use = data.allisout[4,:]
         elif type(data) == dict:
             for name in data.keys():
                 if regressed:
