@@ -28,7 +28,7 @@ class Main:
         self.labels = list(np.unique([e.split('_')[0] for e in self.data]))
         self.sessions = list(self.data.keys())
 
-        # self.add_date_pupildf()
+        # self._pupildf()
 
         today =  datetime.strftime(datetime.now(),'%y%m%d')
         self.figdir = os.path.join(os.getcwd(),'figures',today)
@@ -96,7 +96,7 @@ class Main:
                 tonealigned_viols_2plot = tonealigned_viols
 
             tonealigned_viols_fig, tonealigned_viols_ax = plot_eventaligned(tonealigned_viols_2plot,plotlabels,
-                                                                        self.duration, event,plotax=ax,plotcols=plotcols)
+                                                                        self.duration, event,plotax=ax,plotcols=plotcols, shift=event_shift)
         tonealigned_viols_fig.canvas.manager.set_window_title(f'All trials aligned to {event}')
         # tonealigned_viols_ax.set_ylim((-.5,1))
         tonealigned_viols_ax.set_ylabel(ylabel)
@@ -442,8 +442,7 @@ if __name__ == "__main__":
                                           event='ToneTime', xlabel='Time since pattern onset',
                                           plotlabels=['0.1','0.4','0.9','0.6','control'], plotsess=False, pdr=False,
                                           use4pupil=True,
-                                          pmetric='dlc_radii_a_zscored'
-                                          # animals=['DO48']
+                                          pmetric=pmetric2use
                                           )
         # run.fam_firsts = run.get_firsts(run.familiarity,8,['0.1','0.4','0.9','0.6','control'],'ToneTime')
         shuffle = False
@@ -457,7 +456,7 @@ if __name__ == "__main__":
         #                              plotlabels=['correct','incorrect'],align_col='Trial_End_dt',pdr=False)
         # run.reward = run.get_aligned([['a1']],event='RewardTime',xlabel='Time since reward tones', viol_shift=[-0.0],
         #                                  plotlabels=['correct'],align_col='RewardTone_Time_dt',pdr=True)
-        run.fam_delta = run.get_pupil_delta(run.familiarity[2],['DO48'],['0.1','0.4','0.9','0.6','control'],window=[0,1])
+        #run.fam_delta = run.get_pupil_delta(run.familiarity[2],['DO48'],['0.1','0.4','0.9','0.6','control'],window=[0,1])
 
         run_ntones_analysis = False
         if run_ntones_analysis:
@@ -483,10 +482,13 @@ if __name__ == "__main__":
 
     # pmetric2use = 'rawarea_zscored'
     if 'normdev' in paradigm:
-
         run.normdev_13 = run.get_aligned([['e!0','s3','d0','tones4','stage5'],['e!0','s3','d4','tones4','stage5']],
                                          event_shift=[0.0, 0.0], align_col='Pretone_end_dt',
-                                         event='ToneTime', xlabel='Time since pattern onset', pdr=False,
+                                         event='ToneTime', xlabel='Time since pattern onset', pdr=False,)
+
+        run.normdev_13 = run.get_aligned([['e!0','s3','d0','tones4'],['e!0','s3','d4','tones4']],
+                                         event_shift=[0.5, 0.5],
+                                         event='Violation', xlabel='Time since pattern onset', pdr=True,
                                          plotlabels=['normal','deviant'], plotsess=False,
                                          use4pupil=True, pmetric=pmetric2use)
 
