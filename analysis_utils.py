@@ -569,7 +569,7 @@ def getpatterntraces(data, patterntypes,beh,dur, eventshifts=None,baseline=True,
     return list_eventaligned
 
 
-def plot_eventaligned(eventdata_list, eventnames, dur, beh, plotax=None, pltsize=(12, 9), plotcols=None):
+def plot_eventaligned(eventdata_list, eventnames, dur, beh, plotax=None, pltsize=(12, 9), plotcols=None, shift=[0.0]):
     if plotax is None:
         event_fig, event_ax = plt.subplots(1)
     else:
@@ -605,6 +605,22 @@ def plot_eventaligned(eventdata_list, eventnames, dur, beh, plotax=None, pltsize
         event_ax.add_patch(rect2)
         event_ax.add_patch(rect3)
         event_ax.add_patch(rect4)
+
+    if 'Violation' in beh:
+        s = shift[0]
+        rect1 = matplotlib.patches.Rectangle(((0-s), -10), 0.125, 20, linewidth=0, edgecolor='k', facecolor='k', alpha=0.1)
+        rect2 = matplotlib.patches.Rectangle(((0.25-s), -10), 0.125, 20, linewidth=0, edgecolor='k', facecolor='k',
+                                             alpha=0.1)
+        rect3 = matplotlib.patches.Rectangle(((0.5-s), -10), 0.125, 20, linewidth=0, edgecolor='k', facecolor='k',
+                                             alpha=0.1)
+        rect4 = matplotlib.patches.Rectangle(((0.75-s), -10), 0.125, 20, linewidth=0, edgecolor='k', facecolor='k',
+                                             alpha=0.1)
+        event_ax.axvline(0, c='k', alpha=0.5)
+        event_ax.add_patch(rect1)
+        event_ax.add_patch(rect2)
+        event_ax.add_patch(rect3)
+        event_ax.add_patch(rect4)
+
     if plotax is None:
         event_ax.set_xlabel('Time from event (s)')
         event_ax.set_title(f'Pupil size aligned to {beh}')

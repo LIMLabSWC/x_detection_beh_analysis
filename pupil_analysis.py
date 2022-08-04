@@ -28,7 +28,7 @@ class Main:
         self.labels = list(np.unique([e.split('_')[0] for e in self.data]))
         self.sessions = list(self.data.keys())
 
-        # self.add_date_pupildf()
+        # self._pupildf()
 
         today =  datetime.strftime(datetime.now(),'%y%m%d')
         self.figdir = os.path.join(os.getcwd(),'figures',today)
@@ -53,18 +53,18 @@ class Main:
             td_df['Pretone_end_dt'] = [tstart+timedelta(0,predur) for tstart, predur in
                                        zip(td_df['Trial_Start_dt'], td_df['PreTone_Duration'],)]
 
-    def get_aligned(self,filters,viol_shift=[0.5], align_col='ToneTime_dt', event='ToneTime', plot=True,
-                        xlabel='',plotsess=False, plotlabels=('Normal', 'Deviant'),pdr=False, ax=None,plotcols=None,
-                    use4pupil=False,animals=None,pmetric='dlc_area_zscored'):
+    def get_aligned(self, filters, event_shift=[0.5], align_col='ToneTime_dt', event='ToneTime', plot=True,
+                    xlabel='', plotsess=False, plotlabels=('Normal', 'Deviant'), pdr=False, ax=None, plotcols=None,
+                    use4pupil=False, animals=None, pmetric='dlc_area_zscored'):
 
-        if len(viol_shift) != len(filters):
-            if len(viol_shift*len(filters)) == len(filters):
-                viol_shifts = viol_shift*len(filters)
+        if len(event_shift) != len(filters):
+            if len(event_shift * len(filters)) == len(filters):
+                viol_shifts = event_shift * len(filters)
             else:
                 print('invalid viol_shift param')
                 return None
         else:
-            viol_shifts = viol_shift
+            viol_shifts = event_shift
         print(viol_shifts)
         if use4pupil:
             filters = [fil+['4pupil'] for fil in filters]
@@ -95,7 +95,7 @@ class Main:
                 tonealigned_viols_2plot = tonealigned_viols
 
             tonealigned_viols_fig, tonealigned_viols_ax = plot_eventaligned(tonealigned_viols_2plot,plotlabels,
-                                                                        self.duration, event,plotax=ax,plotcols=plotcols)
+                                                                        self.duration, event,plotax=ax,plotcols=plotcols, shift=event_shift)
         tonealigned_viols_fig.canvas.manager.set_window_title(f'All trials aligned to {event}')
         # tonealigned_viols_ax.set_ylim((-.5,1))
         tonealigned_viols_ax.set_ylabel(ylabel)
@@ -425,25 +425,27 @@ if __name__ == "__main__":
     # pkl2use = r'pickles\DO48_fam_2d_200Hz_015Shan_driftcorr_hpass01.pkl'
     # pkl2use = r'pickles\mouse_normdev_2d_200Hz_015Shan_driftcorr_hpass04_wdlc.pkl'
     # pkl2use = r'pickles\mouse_fam_2d_200Hz_015Shan_driftcorr_hpass04_wdlc.pkl'
-    pkl2use = r'/Volumes/akrami/mouse_pupillometry/pickles/DO48_fam_3d_200Hz_015Shan_driftcorr_hpass01_wdlc.pkl'
+    pkl2use = r'/Users/hildelt/Documents/Thesis/gd_analysis/pickles/human_class1_3d_200Hz_025Shan_driftcorr_hpass025.pkl'
 
     run = Main(pkl2use, (-1,3))
     #paradigm = ['altvsrand','normdev']
     paradigm = ['familiarity']
     # pkl2use = r'pickles\mouse_normdev_2d_200Hz_025Shan_driftcorr_hpass04_wdlc.pkl'
-    pkl2use = r'pickles\mouse_fam_2d_200Hz_015Shan_driftcorr_hpass04_wdlc.pkl'
+    #pkl2use = r'pickles\mouse_fam_2d_200Hz_015Shan_driftcorr_hpass04_wdlc.pkl'
 
-    run = Main(pkl2use, (-1,3))
-    # paradigm = ['altvsrand','normdev']
-    paradigm = ['familiarity']
+    paradigm = ['altvsrand','normdev']
+    #paradigm = ['familiarity']
     pmetric2use = 'dlc_radii_a_zscored'
 
     if 'familiarity' in paradigm:  # analysis to run for familiarity paradigm
         run.familiarity = run.get_aligned([['e!0','plow','tones4'],['e!0','tones4','pmed'],
                                            ['e!0','tones4','phigh'],['e!0','tones4','ppost'], ['e=0']],
-                                          viol_shift=[0.0,0.0,0.0,0.0,0.0],
-                                          event='ToneTime',xlabel='Time since pattern onset',
-                                          plotlabels=['0.1','0.4','0.9','0.6','control'],plotsess=False,pdr=False,
+                                          event_shift=[0.0, 0.0, 0.0, 0.0, 0.0],
+                                          # align_col='None',
+
+                                          event='ToneTime',
+                                          xlabel='Time since pattern onset',
+                                          plotlabels=['0.1','0.4','0.9','0.6','control'], plotsess=False, pdr=False,
                                           use4pupil=True,
                                           pmetric='dlc_radii_a_zscored'
                                           # animals=['DO48']
@@ -460,7 +462,7 @@ if __name__ == "__main__":
         #                              plotlabels=['correct','incorrect'],align_col='Trial_End_dt',pdr=False)
         # run.reward = run.get_aligned([['a1']],event='RewardTime',xlabel='Time since reward tones', viol_shift=[-0.0],
         #                                  plotlabels=['correct'],align_col='RewardTone_Time_dt',pdr=True)
-        run.fam_delta = run.get_pupil_delta(run.familiarity[2],['DO48'],['0.1','0.4','0.9','0.6','control'],window=[0,1])
+        #run.fam_delta = run.get_pupil_delta(run.familiarity[2],['DO48'],['0.1','0.4','0.9','0.6','control'],window=[0,1])
 
         run_ntones_analysis = False
         if run_ntones_analysis:
@@ -486,33 +488,33 @@ if __name__ == "__main__":
 
     # pmetric2use = 'rawarea_zscored'
     if 'normdev' in paradigm:
-        run.normdev = run.get_aligned([['e!0','s3','d0','tones4'],['e!0','s3','d4','tones4']], #line629 in utils
-                                      viol_shift=[0.0],
-                                      event='ToneTime',xlabel='Time since pattern onset', pdr=False,
-                                      plotlabels=['normal','deviant'],plotsess=True,
-                                      use4pupil=True,pmetric='dlc_radii_a_zscored')
+        run.normdev = run.get_aligned([['e!0','s3','d0','tones4'],['e!0','s3','d4','tones4']],  #line629 in utils
+                                      event_shift=[0.0],
+                                      event='ToneTime', xlabel='Time since pattern onset', pdr=False,
+                                      plotlabels=['normal','deviant'], plotsess=True,
+                                      use4pupil=True, pmetric='dlc_radii_a_zscored')
         run.normdev_13 = run.get_aligned([['e!0','s3','d0','tones4'],['e!0','s3','d4','tones4']],
-                                      viol_shift=[0.5,0.5],
-                                      event='Violation',xlabel='Time since pattern onset', pdr=True,
-                                      plotlabels=['normal','deviant'],plotsess=False,
-                                      use4pupil=True,pmetric=pmetric2use)
+                                         event_shift=[0.5, 0.5],
+                                         event='Violation', xlabel='Time since pattern onset', pdr=True,
+                                         plotlabels=['normal','deviant'], plotsess=False,
+                                         use4pupil=True, pmetric=pmetric2use)
 
         run.normdev2 = run.get_aligned([['e!0','s3','d0','tones4'],['e!0','s3','d2','tones4']],
-                                      viol_shift=[0.75,0.75],
-                                      event='Violation',xlabel='Time since pattern onset', pdr=False,
-                                      plotlabels=['normal','deviant'],plotsess=False,
-                                      use4pupil=True,pmetric=pmetric2use)
+                                       event_shift=[0.75, 0.75],
+                                       event='Violation', xlabel='Time since pattern onset', pdr=False,
+                                       plotlabels=['normal','deviant'], plotsess=False,
+                                       use4pupil=True, pmetric=pmetric2use)
 
         run.newnorms = run.get_aligned([['e!0','s3','d0','tones4'],['e!0','s3','d-1','tones4']],
-                                       viol_shift=[0.0,0.0],
-                                       event='ToneTime',xlabel='Time since pattern onset', pdr=False,
-                                       plotlabels=['normal','new normals'],plotsess=False,
-                                       use4pupil=True,pmetric=pmetric2use)
+                                       event_shift=[0.0, 0.0],
+                                       event='ToneTime', xlabel='Time since pattern onset', pdr=False,
+                                       plotlabels=['normal','new normals'], plotsess=False,
+                                       use4pupil=True, pmetric=pmetric2use)
         # run.normdev_delta = run.get_pupil_delta(run.normdev[2],['DO45','DO46','DO47','DO48'],['normal','deviant'])
 
     if 'altvsrand' in paradigm:
         run.altvsrand = run.get_aligned([['e!0','s0','tones4'], ['e!0','s1','tones4']], pdr=False,
-                                        viol_shift=[0.0,0.0],
+                                        event_shift=[0.0, 0.0],
                                         xlabel='Time since pattern offset', plotsess=False,
                                         plotlabels=['random','alternating'],
-                                        use4pupil=True,pmetric=pmetric2use)
+                                        use4pupil=True, pmetric=pmetric2use)
