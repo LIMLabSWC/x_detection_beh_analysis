@@ -424,7 +424,7 @@ def add_datetimecol(df, colname, timefmt='%H:%M:%S.%f'):
     except:ValueError
 
 def align2eventScalar(df,pupilsize,pupiltimes, pupiloutliers,beh, dur, filters=('4pupil','b1','c1'), baseline=False,eventshift=0,
-                      outlierthresh=0.9,stdthresh=3,subset=None) -> pd.DataFrame:
+                      outlierthresh=0.5,stdthresh=3,subset=None) -> pd.DataFrame:
 
     pupiltrace = pd.Series(pupilsize,index=pupiltimes)
     outlierstrace = pd.Series(pupiloutliers,index=pupiltimes)
@@ -845,7 +845,7 @@ def get_dlc_diams(df,n_frames):
     centersx_ = np.full(n_frames,np.nan)
     centersy_ = np.full(n_frames,np.nan)
 
-    for i,row in enumerate(bodypoints[:n_frames,:]):
+    for i,row in enumerate(bodypoints[-n_frames:,:]):
         reshaped = row[0:24].reshape([8,3])
         goodpoints = reshaped[reshaped[:,2]>.3].astype(float)
         if goodpoints.shape[0] < 3:

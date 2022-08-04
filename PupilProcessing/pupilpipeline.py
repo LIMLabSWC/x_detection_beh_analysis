@@ -165,7 +165,7 @@ class Main:
                     animal_pupil.index = merged_ix
 
                     print(f'Uniformly sampling to {1/self.samplerate} Hz')
-                    pupil_uni = animal_pupil.resample(f'{self.samplerate}S').backfill().copy()  # resample to samplerate
+                    pupil_uni = animal_pupil.resample(f'{self.samplerate}S').ffill().copy()  # resample to samplerate
 
                     # get pupil area
                     for col in ['2d_radii']:
