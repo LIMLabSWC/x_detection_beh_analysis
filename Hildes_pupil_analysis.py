@@ -13,8 +13,8 @@ if __name__ == "__main__":
     #pkl2use = r'/Users/hildelt/Documents/Thesis/gd_analysis/pickles/mouse_normdev_2d_200Hz_025Shan_driftcorr_hpass04_wdlc.pkl'
     run = Main(pkl2use, (-1,3))
     paradigm = ['normdev'] #'familiarity' 'altvsrand'
-    pmetric2use = 'dlc_radii_a_zscored' # to use deeplabcut
-    species = 'human' # 'mouse'
+    pmetric2use = 'rawarea_zscored' # to use deeplabcut
+    species = 'dlc_radii_a_zscored' # 'mouse'
 
     if species == 'mouse':
         # Stage 4 normal - deviant - none
@@ -111,29 +111,31 @@ if __name__ == "__main__":
 
 
     if species == 'human':
+        pmetric2use = 'rawarea_zscored'
         #Normal vs deviant vs none - Tone time
         run.normdev = run.get_aligned([['e!0', 'd0', 'tones4','a1'], ['e!0', 'd4', 'tones4','a1'], ['e=0','a1']],  # line629 in utils
                                       event_shift=[0.0,0.0,0.0], align_col = 'Pretone_end_dt',
                                       event='ToneTime', xlabel='Time since pattern start', pdr=False,
                                       plotlabels=['normal', 'deviant', 'none'], plotsess=False,
-                                      use4pupil=True, pmetric='dlc_radii_a_zscored')
+                                      use4pupil=True)
+        run.normdev[0].canvas.manager.set_window_title('human_normdev_tonetime')
 
         #Normal vs deviant - White noise
         run.xdetect_normdev = run.get_aligned(
-            [['e!0', 'd0', 'tones4', 'a1'], ['e!0', 'd4', 'tones4', 'a1'], ['e=0', 'a1', 'stage4']],
+            [['e!0', 'd0', 'tones4', 'a1'], ['e!0', 'd4', 'tones4', 'a1'], ['e=0', 'a1']],
             event_shift=[0.0, 0.0, 0.0], align_col='Gap_Time_dt',  # ,0.0
             event='White_Noise', xlabel='Time since X', pdr=False,
             plotlabels=['normal', 'deviant', 'none'], plotsess=False,  #
-            use4pupil=True, pmetric='dlc_radii_a_zscored')
+            use4pupil=True)
         run.xdetect_normdev[0].canvas.manager.set_window_title('human_normdev_whitenoise')
 
         #Normal vs deviant - Start time 'Trial_Start_dt
         run.start_normdev = run.get_aligned(
-            [['e!0', 'd0', 'tones4', 'a1'], ['e!0', 'd4', 'tones4', 'a1'], ['e=0', 'a1', 'stage4']],
+            [['e!0', 'd0', 'tones4', 'a1'], ['e!0', 'd4', 'tones4', 'a1'], ['e=0', 'a1']],
             event_shift=[0.0, 0.0, 0.0], align_col='Trial_Start_dt',
-            event='Trial_Start_dt', xlabel='Time since X', pdr=False,
+            event='Trial_Start_dt', xlabel='Time since trial start', pdr=False,
             plotlabels=['normal', 'deviant', 'none'], plotsess=False,
-            use4pupil=True, pmetric='dlc_radii_a_zscored')
+            use4pupil=True)
         run.start_normdev[0].canvas.manager.set_window_title('human_normdev_trialstart')
 
         #Correct vs miss - White noise
@@ -142,7 +144,7 @@ if __name__ == "__main__":
             event_shift=[0.0, 0.0], align_col='Gap_Time_dt',
             event='White_Noise', xlabel='Time since X', pdr=False,
             plotlabels=['correct', 'miss'], plotsess=False,
-            use4pupil=True, pmetric='dlc_radii_a_zscored')
+            use4pupil=True)
 
         run.x_performance[0].canvas.manager.set_window_title('human_miss_correct_whitenoise')
 
@@ -152,7 +154,7 @@ if __name__ == "__main__":
             event_shift=[0.0, 0.0], align_col='Pretone_end_dt',
             event='ToneTime', xlabel='Time since X', pdr=False,
             plotlabels=['correct', 'miss'], plotsess=False,
-            use4pupil=True, pmetric='dlc_radii_a_zscored')
+            use4pupil=True)
 
         run.x_performance_tone[0].canvas.manager.set_window_title('human_miss_correct_ToneTime')
 
