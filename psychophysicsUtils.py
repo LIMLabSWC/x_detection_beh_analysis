@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import matplotlib 
 from matplotlib import cm
 # from matplotlib import rcParams
-# from mpl_toolkits.axes_grid1 import make_axes_locatable
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 # from cycler import cycler
 import pandas as pd
 from copy import copy
@@ -274,16 +274,17 @@ def uniformSample(dataArray, timeArray, new_dt = None, aligntimes = None, verbos
 	#instead of interpolation to a new constant dt_new it can instead interpolate to exactly match a currently existing timeseries array
 	#useful if you want compare two arrays recorded at the same time but with different precise FPSs
 	if aligntimes is None: 
-		t = timeArray[0] 
+		print(f'{timeArray[-1]-timeArray[0]}, {(timeArray[-1]-timeArray[0])/dt} ')
+		t = timeArray[0]
 		datum = dataArray[0] 
 		while True:
 			newTimeArray.append(t)
 			newDataArray.append(datum)
 			if isinstance(t, pd._libs.tslibs.timestamps.Timestamp):
-				t += timedelta(new_dt)
+				t += timedelta(0,new_dt)
 			else:
 				t += new_dt
-			if t > timeArray[-1]:
+			if t >= timeArray[-1]:
 				break
 			else: #interpolate 
 				idx_r = np.searchsorted(timeArray,t)
@@ -335,20 +336,23 @@ def removeOutliers(dataArray,timeArray,n_speed=2.5,n_size=2.5, plotHist=False): 
 	for i in range(len(dataArray)):
 		absSpeed[i]=max(np.abs((data[i]-data[i-1])/(timeArray[i]-timeArray[i-1])),np.abs((data[(i+1)%len(data)]-data[i])/(timeArray[(i+1)%len(data)]-timeArray[i])))
 
-	MAD_speed = np.median(np.abs(absSpeed - np.median(absSpeed)))
-	MAD_size = np.median(np.abs(size - np.median(size)))
-	threshold_speed_low = np.median(absSpeed) - n_speed*MAD_speed
-	threshold_size_low = np.median(size) - n_size*MAD_size
-	threshold_speed_high = np.median(absSpeed) + n_speed*MAD_speed
-	threshold_size_high = np.median(size) + n_size*MAD_size
+	MAD_speed = np.nanmedian(np.abs(absSpeed - np.nanmedian(absSpeed)))
+	MAD_size = np.nanmedian(np.abs(size - np.nanmedian(size)))
+	threshold_speed_low = np.nanmedian(absSpeed) - n_speed*MAD_speed
+	threshold_size_low = np.nanmedian(size) - n_size*MAD_size
+	threshold_speed_high = np.nanmedian(absSpeed) + n_speed*MAD_speed
+	threshold_size_high = np.nanmedian(size) + n_size*MAD_size
 	
 	data = data * (absSpeed<threshold_speed_high) * (absSpeed>threshold_speed_low)
 	print(" (%.2f%%) " %(100*(1-np.sum((absSpeed<threshold_speed_high) * (absSpeed>threshold_speed_low))/len(data))),end="")
-	
-	data = data * (size>threshold_size_low) * (size!=0)#only take away low sizes and zero values
+
+	print(f'High thresh:{threshold_size_high}, Low thresh: {threshold_size_low}')
+	data = data * (data>threshold_size_low) * (data!=0)#only take away low sizes and zero values
 	print("and size lowliers/zero (%.2f%%) " %(100*(1-np.sum((size>threshold_size_low)*((size!=0)))/len(data))), end="")
 	
 	print(" (additional %.2f%% removed vs raw)" %(100*(np.sum(data == 0) - np.sum(dataArray==0))/len(data)))
+
+	data = np.nan_to_num(data)
 	
 	if plotHist == True: #plots histograms and thresholds
 		fig, ax = plt.subplots(1,2)
@@ -362,7 +366,7 @@ def removeOutliers(dataArray,timeArray,n_speed=2.5,n_size=2.5, plotHist=False): 
 		ax[1].axvline(x=threshold_size_high,c='k')
 		ax[0].set_title("data")
 		ax[1].set_title("d data / dt ")
-	isOutlier = np.invert((absSpeed<threshold_speed_high) * (absSpeed>threshold_speed_low) * (dataArray>threshold_size_low) * (dataArray!=0))	
+	isOutlier = np.invert((absSpeed<threshold_speed_high) * (absSpeed>threshold_speed_low) * (dataArray>threshold_size_low) * (dataArray!=0))  #
 	
 	return data, isOutlier
 
@@ -461,7 +465,7 @@ def interpolateArray(dataArray, timeArray, gapExtension = 0.2):
 			k = jump_dist
 			while True: 
 				if i-k < 0: #edge case where we fall off array 
-					start, startidx = np.mean(dataArray), 0
+					start, startidx = np.nanmean(dataArray), 0
 					break
 				elif i-k >= 0:
 					if dataArray[i-k] == 0:
@@ -483,7 +487,7 @@ def interpolateArray(dataArray, timeArray, gapExtension = 0.2):
 						break
 
 				if j+k >= len(dataArray): #edge case where we fall off array 
-					end, endidx = np.mean(dataArray), len(dataArray)
+					end, endidx = np.nanmean(dataArray), len(dataArray)
 					break
 				elif j+k < len(dataArray):
 					if dataArray[j+k] == 0:
@@ -584,7 +588,8 @@ def zScore(dataArray, timeArray=None, normrange=None):
 	if ((timeArray is not None) and (normrange is not None)):
 		start_idx, end_idx = np.argmin(np.abs(timeArray-normrange[0])), np.argmin(np.abs(timeArray-normrange[1]))
 	print("z scoring")
-	zscoreDataArray = (dataArray - np.mean(dataArray[start_idx:end_idx]))/np.std(dataArray[start_idx:end_idx])
+	# zscoreDataArray = (dataArray - np.nanmean(dataArray[start_idx:end_idx]))/np.std(dataArray[start_idx:end_idx])
+	zscoreDataArray = (dataArray - np.nanmean(dataArray))/np.nanstd(dataArray)
 	return zscoreDataArray
 
 
@@ -627,7 +632,8 @@ def plotData(dataArray, timeArray, title=None, zoomRange = [0,60], saveName = No
 	fig, ax = plt.subplots(1,2,figsize=(4,2),sharey=True)
 	fig.suptitle(title)
 	ax[0].scatter((timeArray[int(zoomRange[0]/dt):int(zoomRange[1]/dt)] - timeArray[0]),dataArray[int(zoomRange[0]/dt):int(zoomRange[1]/dt)],c=color[int(zoomRange[0]/dt):int(zoomRange[1]/dt)],s=0.1)
-	ax[0].set_ylim([ymin,ymax])
+	try:ax[0].set_ylim([ymin,ymax])
+	except ValueError: pass
 	ax[0].set_ylabel('Pupil diameter')
 	ax[0].set_xlabel('Time from start of recording / s')
 	ax[0].set_title('Raw data (%gs)'%(zoomRange[1]-zoomRange[0]))
@@ -635,14 +641,15 @@ def plotData(dataArray, timeArray, title=None, zoomRange = [0,60], saveName = No
 	ax[0].add_patch(rect1)
 
 	ax[1].scatter((timeArray - timeArray[0])[::5],dataArray[::5],c=color[::5],s=0.05)
-	ax[1].set_ylim([ymin,ymax])
+	try:ax[1].set_ylim([ymin,ymax])
+	except ValueError: pass
 	ax[1].set_ylabel('Pupil diameter')
 	ax[1].set_xlabel('Time from start of recording / s')
 	ax[1].set_title('Raw data (full)')
 	rect2 = matplotlib.patches.Rectangle((zoomRange[0],ymin),zoomRange[1]-zoomRange[0],ymax-ymin,linewidth=0.3,edgecolor='darkgrey',fill=False,linestyle="--")
 	ax[1].add_patch(rect2)
 
-	if hist==True: 
+	if hist==True and ymax >0:
 		x_normal = dataArray[np.where(((isOutlier < outlierThreshold) * (isInterpolated == False)) == True)]
 		x_interpolated = dataArray[np.where(((isOutlier < outlierThreshold) * (isInterpolated == True)) == True)]
 		x_outlier = dataArray[np.where(isOutlier > outlierThreshold)]
@@ -656,9 +663,10 @@ def plotData(dataArray, timeArray, title=None, zoomRange = [0,60], saveName = No
 		bins = np.arange(-lim, lim + binwidth, binwidth)
 		axHisty.hist(np.array([x_outlier,x_interpolated,x_normal],dtype=object), bins=bins, orientation='horizontal',color=['C1','C5','C0'],alpha=0.8, stacked=True)
 
-	if saveName is not None: 
-		plt.savefig('./figures/' + saveName + '.pdf',tightlayout=True, transparent=False,dpi=100)
-
+	if saveName is not None:
+		fig.set_tight_layout(True)
+		# fig.savefig(f'./figures/{saveName}.png',tightlayout=True, transparent=False,dpi=100)
+	plt.close()
 	return fig, ax
 
 
@@ -708,7 +716,7 @@ class pupilDataClass():
 
 	def plot(self, title=None, zoomRange = [0,60], saveName = None, hist=True, ymin='-ymax', ymax=None):
 		fig, ax = plotData(self.pupilDiams, self.times, title=title, zoomRange = zoomRange, saveName = saveName, ymin=ymin, ymax=ymax, isInterpolated=self.isInterpolated, isOutlier=self.isOutlier)
-		saveFigure(fig,f"{self.name}_pupildata")
+		saveFigure(fig,f"_{saveName}_pupildata")
 
 	def loadAndProcessTrialData(self):
 		self.trialData, self.times = loadAndProcessTrialData(self.name, self.times)
@@ -1216,14 +1224,14 @@ Returns:
 Nothing is returned
 """
 def saveFigure(fig,saveTitle=None):
-	today =  datetime.strftime(datetime.now(),'%y%m%d')
+	today = datetime.strftime(datetime.now(),'%y%m%d')
 	if not os.path.isdir(f"./figures/{today}/"):
 		os.mkdir(f"./figures/{today}/")
 	if saveTitle is None: 
 		saveTitle=""
 	figdir = f"./figures/{today}/"
 	now = datetime.strftime(datetime.now(),'%H%M')
-	fig.savefig(f"{figdir}{saveTitle}_{now}.png", dpi=300,bbox_inches='tight')
+	fig.savefig(f"{figdir}{saveTitle}_{now}.png", dpi=300)
 	
 	return
 

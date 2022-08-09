@@ -91,6 +91,7 @@ class Main:
         pclass.uniformSample(self.samplerate)
         pclass.removeOutliers(n_speed=4, n_size=4)
         pclass.interpolate(gapExtension=0.05)
+
         # pclass.frequencyFilter()
         pclass.pupilDiams = utils.smooth(pclass.pupilDiams,int(self.han_size/self.samplerate))
         if self.hpass:
