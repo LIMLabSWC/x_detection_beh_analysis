@@ -12,7 +12,7 @@ import numpy as np
 from scipy.stats import zscore
 import scipy.signal
 import time
-
+from copy import deepcopy as copy
 
 # script for building trial data and pupil data dict
 # will generate pickle of dict
@@ -81,6 +81,25 @@ class Main:
 
         outs_arr = np.array(outliers_list)
         return outs_arr.any(axis=0).astype(int),outs_arr[-1,:],outs_arr
+
+    def process_pupil(self,pclass,name,pdf,pdf_colname,timeidx):
+        if 'dlc' in pdf_colname:
+            print('')
+        pclass.rawPupilDiams = np.array(pdf[pdf_colname])
+        # pclass[name].rawTimes = np.array(pdf.index.asi8)
+
+        pclass.uniformSample(self.samplerate)
+        pclass.removeOutliers(n_speed=4, n_size=4)
+        pclass.interpolate(gapExtension=0.05)
+        # pclass.frequencyFilter()
+        pclass.pupilDiams = utils.smooth(pclass.pupilDiams,int(self.han_size/self.samplerate))
+        if self.hpass:
+            pclass.pupilDiams = utils.butter_highpass_filter(pd.Series(pclass.pupilDiams, index=timeidx),
+                                                             self.hpass,1/self.samplerate)
+        pclass.zScore()
+        pclass.plot(saveName=f'{name}_{pdf_colname}')
+
+        return pclass.pupilDiams, pclass.isOutlier
 
     def load_pdata(self):
         today = datetime.strftime(datetime.now(),'%y%m%d')
@@ -164,65 +183,44 @@ class Main:
                     merged_ix = [e.replace(year=date_dt.year,month=date_dt.month,day=date_dt.day) for e in pupil_df_ix]
                     animal_pupil.index = merged_ix
 
-                    print(f'Uniformly sampling to {1/self.samplerate} Hz')
-                    pupil_uni = animal_pupil.resample(f'{self.samplerate}S').ffill().copy()  # resample to samplerate
+
 
                     # get pupil area
                     for col in ['2d_radii']:
-                        col_radius = [e[1:-1].split(',') for e in pupil_uni[col]]
+                        col_radius = [e[1:-1].split(',') for e in animal_pupil[col]]
                         for i,coord in enumerate(['a','b']):
-                            pupil_uni[f'{col}_{coord}'] = [float(e[i]) for e in col_radius]
-                    pupil_uni['rawarea'] = np.array(pupil_uni['2d_radii_a']*pupil_uni['2d_radii_b']*np.pi)
-
-                    # get 2d/3d xy
-
-                    _, pupil_uni['dlc_isout'] = removeouts(pupil_uni['dlc_area'],n_speed=10000,n_size=3.5)
-
+                            animal_pupil[f'{col}_{coord}'] = [float(e[i]) for e in col_radius]
+                    animal_pupil['rawarea'] = np.array(animal_pupil['2d_radii_a']*animal_pupil['2d_radii_b']*np.pi)
                     for col in ['2d_centre']:
-                        col_xy = [e[1:-1].split(',') for e in pupil_uni[col]]
+                        col_xy = [e[1:-1].split(',') for e in animal_pupil[col]]
                         for i,coord in enumerate(['x','y']):
-                            pupil_uni[f'{col}_{coord}'] = [float(e[i]) for e in col_xy]
+                            animal_pupil[f'{col}_{coord}'] = [float(e[i]) for e in col_xy]
+
+                    # print(f'Uniformly sampling to {1/self.samplerate} Hz')
+                    animal_pupil_subset = animal_pupil[['confidence','2d_radii_a','2d_radii_b','rawarea',
+                                                        '2d_centre_x','2d_centre_y',
+                                                        'diameter_2d','diameter_3d',
+                                                        'dlc_radii_a','dlc_radii_b','dlc_radii_ab','dlc_area']]
+
+                    # Start of Tom's pipeline
+                    pupilclass = pupilDataClass(f'{name}')
+                    pupilclass.rawTimes = np.array([e.timestamp() for e in animal_pupil_subset.index])
+                    unitimes = uniformSample(pupilclass.rawTimes,pupilclass.rawTimes,new_dt=self.samplerate)[1]
+                    unitime_ind = [datetime.fromtimestamp(e) for e in unitimes]
+                    pupil_uni = pd.DataFrame([],index=unitime_ind)
                     if self.pupil_file_tag == 'pupildata_3d':
-                        pupil_uni['anyisout'],pupil_uni['confisout'], self.data[name].allisout = self.get_outliers(pupil_uni['2d_centre_x'],
-                                                                                                                   pupil_uni['2d_centre_y'],
-                                                                                                                   pupil_uni['rawarea'],
-                                                                                                                   pupil_uni.get('diameter_3d',np.zeros_like(pupil_uni.index)),
-                                                                                                                   pupil_uni['confidence'])
+                        diam_col = 'diameter_3d'
                     elif self.pupil_file_tag == 'pupildata_2d':
-                        pupil_uni['anyisout'],pupil_uni['confisout'], self.data[name].allisout = self.get_outliers(pupil_uni['2d_centre_x'],
-                                                                                                                   pupil_uni['2d_centre_y'],
-                                                                                                                   pupil_uni['rawarea'],
-                                                                                                                   pupil_uni.get('diameter_2d',np.zeros_like(pupil_uni.index)),
-                                                                                                                   pupil_uni['confidence'])
-
-
-                    b, a = scipy.signal.butter(3, 0.025)
-                    for col2norm in ['rawarea','diameter_3d','dlc_area','dlc_radii_a','dlc_radii_b','dlc_radii_ab']:
-
-                        print(f'interpolating {col2norm}')
-                        # col_noouts= pupil_uni[col2norm].where(pupil_uni['anyisout']==0,np.nan)
-                        if 'dlc' in col2norm:
-                            col_noouts= pupil_uni[col2norm].where(pupil_uni['dlc_isout']==0,np.nan)
-                        else:
-                            col_noouts= pupil_uni[col2norm].where(pupil_uni['confisout']==0,np.nan)
-                        before=time.time()
-                        pupil_uni[f'{col2norm}_noouts'] = col_noouts
-                        method, order = 'spline', 1
-
-                        try:pupil_uni[f'{col2norm}_interpol'] = interpolatepupil(pupil_uni[f'{col2norm}_noouts'])
-                        except TypeError: print('booboo')
-
-                        print(f'interpolate {method},ord{order} took {time.time()-before} s')
-                        print(f'smoothing  {col2norm}: hanning window size {self.han_size} ms')
-
-                        pupil_uni[f'{col2norm}_ffilt'] = utils.smooth(np.array(pupil_uni[f'{col2norm}_interpol'].interpolate('linear')),
-                                                                      int(self.han_size/self.samplerate))
-                        if self.hpass:
-                            pupil_uni[f'{col2norm}_ffilt'] = utils.butter_highpass_filter(pupil_uni[f'{col2norm}_ffilt'],
-                                                                                      self.hpass,1/self.samplerate)
-                        # pupil_uni[f'{col2norm}_ffilt'] = scipy.signal.filtfilt(b, a, pupil_uni[f'{col2norm}_interpol'].interpolate('linear', imit_direction='both'))
-                        print(f'z-scoring {col2norm}')
-                        pupil_uni[f'{col2norm}_zscored'] = zscore(pupil_uni[f'{col2norm}_ffilt'])
+                        diam_col = 'diameter_2d'
+                    else:
+                        break
+                    outs_list = []
+                    for col2norm in ['dlc_area','rawarea',diam_col,'dlc_radii_a','dlc_radii_b','dlc_radii_ab']:
+                        pupil_processed = copy(self.process_pupil(pupilclass,f'{name}_{date}',
+                                                                  animal_pupil_subset, col2norm,unitime_ind))
+                        pupil_uni[f'{col2norm}_zscored'] = pupil_processed[0]
+                        outs_list.append(pupil_processed[1])
+                    pupil_uni['isout'] = outs_list[-1]
 
                     try:
                         df_cols = pupil_uni.columns
@@ -233,7 +231,6 @@ class Main:
                     except KeyError:
                         print(f'KeyError for session {animal,date}')
                         continue
-
                     for col in session_TD.keys():
                         if 'Time' in col or 'Start' in col or 'End' in col:
                             if 'Wait' not in col and 'dt' not in col:

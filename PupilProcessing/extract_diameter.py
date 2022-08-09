@@ -90,13 +90,13 @@ def load_and_yield_data(directory, topic="pupil"):
     [2] https://docs.pupil-labs.com/#data-files
     """
     ts_file = os.path.join(directory, topic + "_timestamps.npy")
-    data_ts = np.load(ts_file)
 
     msgpack_file = os.path.join(directory, topic + ".pldata")
     with open(msgpack_file, "rb") as fh:
         unpacker = msgpack.Unpacker(fh, raw=False, use_list=False)
-        for timestamp, (topic, payload) in zip(data_ts, unpacker):
+        for topic, payload in unpacker:
             datum = deserialize_msgpack(payload)
+            timestamp = datum['timestamp']
 
             # custom extraction function for pupil data, see below for details
             eye_id, conf, dia_2d, dia_3d, axes_2d, centre_2d = extract_eyeid_diameters(datum)

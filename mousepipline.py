@@ -29,8 +29,8 @@ if __name__ == "__main__":
             spec_animal_dates.append(animaldates[i])
 
     # han_size = 1
-    run = Main(spec_animal,spec_animal_dates,r'pickles\mouse_normdev_2d_200Hz_025Shan_driftcorr_hpass04_wdlc.pkl',tdatadir,
+    run = Main(spec_animal,spec_animal_dates,r'pickles\mouse_normdev_2d_90Hz_025Shan_driftcorr_nohpass_wdlc_TOM.pkl',tdatadir,
                pdatadir,
-               'pupildata_2d',200.0,han_size=.25,hpass=0.25,aligneddir=aligneddir,
+               'pupildata_2d',90.0,han_size=.25,hpass=None,aligneddir=aligneddir,
                subjecttype='mouse',dlc_snapshot=1300000,overwrite=False)
     run.load_pdata()

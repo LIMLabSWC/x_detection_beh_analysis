@@ -24,7 +24,7 @@ def main(eye_video_paths, eye_ts_paths,show_video,invert_gray_im,show_2d):
         # create 2D detector
         detector_2d = Detector2D()
         # create pye3D detector
-        camera = CameraModel(focal_length=561.5, resolution=[400, 400])
+        camera = CameraModel(focal_length=3.04, (256, 256))
         detector_3d = Detector3D(camera=camera, long_term_mode=DetectorMode.blocking)
         # load eye video
         eye_video_meta = skvideo.io.ffprobe(eye_video_path)
@@ -55,7 +55,7 @@ def main(eye_video_paths, eye_ts_paths,show_video,invert_gray_im,show_2d):
                 if frame_number%10000==0 and frame_number>0:
                     
                     print((time.time()-time_pre)/frame_number)
-                csvwriter.writerow([round(eye_ts[int(frame_number)],3),[round(float(v), 3) for v in ellipse_2d["center"]],[round(float(v / 2), 3) for v in ellipse_2d["axes"]],\
+                csvwriter.writerow([round(eye_ts[int(frame_number)],3),[round(float(v), 3) for v in ellipse_2d["center"]],[round(float(v / 2), 3) for v in ellipse_2d["axes"]],
                                     [round(float(v), 3) for v in ellipse_3d["center"]],[round(float(v / 2), 3) for v in ellipse_3d["axes"]]])
             print(f'total time taken: {round((time.time()-time_pre)/60,2)} mins')
 

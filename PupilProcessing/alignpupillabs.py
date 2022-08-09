@@ -151,7 +151,7 @@ class Main:
 
 
 if __name__ == '__main__':
-    subject_type = 'human'
+    subject_type = 'mice'
 
     if subject_type in ['mice', 'rats']:
         animals = ['DO45','DO46','DO47','DO48']
@@ -165,7 +165,7 @@ if __name__ == '__main__':
                     if col.find('Time') != -1 or col.find('Start') != -1 or col.find('End') != -1:
                         if col.find('Wait') == -1 and col.find('dt') == -1:
                             add_datetimecol(td_df,col)
-        valid_sessions = find_good_sessions(td_df,4,50)
+        valid_sessions = find_good_sessions(td_df,5,50)
         run = Main(valid_sessions[1],valid_sessions[2],protocol_dirname,
                    tdatadir,protocol_aligneddir,overwrite=0,merge=0)
         run.main_loop()
