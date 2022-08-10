@@ -526,7 +526,7 @@ def getpatterntraces(data, patterntypes,beh,dur, eventshifts=None,baseline=True,
                 td2use = data.trialData
             else: return None
             times2use = pd.Series(data.pupildf.index)
-            outs2use = data.allisout[4,:]
+            outs2use = data.pupildf['isout']
         elif type(data) == dict:
             for name in data.keys():
                 if regressed:
@@ -538,9 +538,9 @@ def getpatterntraces(data, patterntypes,beh,dur, eventshifts=None,baseline=True,
                 td2use = data[name].trialData
                 times2use = pd.Series(data[name].pupildf.index)
                 if 'dlc' in pupilmetricname:
-                    outs2use = data[name].pupildf['dlc_isout']
+                    outs2use = data[name].pupildf['isout']
                 else:
-                    outs2use = data[name].pupildf['confisout']
+                    outs2use = data[name].pupildf['isout']
         else:
             print('Incorrect data structure')
             name = None
@@ -861,7 +861,7 @@ def get_dlc_diams(df,n_frames):
     centersx_ = np.full(n_frames,np.nan)
     centersy_ = np.full(n_frames,np.nan)
 
-    for i,row in enumerate(bodypoints[-n_frames:,:]):
+    for i,row in enumerate(bodypoints[:n_frames,:]):
         reshaped = row[0:24].reshape([8,3])
         goodpoints = reshaped[reshaped[:,2]>.3].astype(float)
         if goodpoints.shape[0] < 3:
