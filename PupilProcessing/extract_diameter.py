@@ -130,15 +130,17 @@ def deserialize_msgpack(msgpack_bytes):
 
 def naming_csv(recording, filename_suffix='extracted_pupils.csv'):
     directory = recording.split('\\')
+    print(directory)
     date = directory[-2]
-    date_in_dt = datetime.strptime(date, '%Y_%m_%d')
+    try: date_in_dt = datetime.strptime(date, '%Y_%m_%d')
+    except ValueError: return None
     date_in_corstr = datetime.strftime(date_in_dt, '%y%m%d')
     # ''[:2].isnumeric()
     # first make sure I am doing this within the recordings directory
     try:content = pd.read_csv(os.path.join(recording, 'user_info.csv'), index_col=0)
     except pd.errors.ParserError: print('error')
     print(content['value'])
-    animals = ['DO45', 'DO46', 'DO47', 'DO48']
+    animals = ['DO45', 'DO46', 'DO47', 'DO48','ES01','ES02','ES03']
     name_val = content['value']['name']
     if type(name_val) == str:
         name_val = name_val.upper()
@@ -192,14 +194,14 @@ if __name__ == "__main__":
 
     # recordings = args.recordings
     recordings = []
-    for root, folder, file in os.walk(r'W:\mouse_pupillometry\mousenormdev'):
-        if root.split('\\')[-1].isnumeric():
+    for root, folder, file in os.walk(r'W:\mouse_pupillometry\mousenormdev_swap'):
+        if root.split('\\')[-1].isnumeric() and root.split('\\')[-1] != 'exports':
             recordings.append(root)
 
     for rec in recordings:
         file_name = naming_csv(rec)
         if file_name is not None:
-            process_recording(recording=rec, csv_out=file_name, overwrite=False)
+            process_recording(recording=rec, csv_out=file_name, overwrite=True)
         else:
             print(file_name,'None file name')
     # main(recordings=[r'W:\humanpsychophysics\HumanXDetection\Data\2022_01_19\000'], csv_out='test.csv1', overwrite=True)

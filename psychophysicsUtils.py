@@ -352,7 +352,7 @@ def removeOutliers(dataArray,timeArray,n_speed=2.5,n_size=2.5, plotHist=False): 
 	
 	print(" (additional %.2f%% removed vs raw)" %(100*(np.sum(data == 0) - np.sum(dataArray==0))/len(data)))
 
-	data = np.nan_to_num(data)
+	# data = np.nan_to_num(data)
 	
 	if plotHist == True: #plots histograms and thresholds
 		fig, ax = plt.subplots(1,2)

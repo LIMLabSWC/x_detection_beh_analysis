@@ -40,7 +40,7 @@ def merge_sessions(datadir,animal_list,filestr_cond, date_range, datestr_format=
                     filename_parts = file.split('_')
                     animal_name = filename_parts[0]
                     session_date = filename_parts[2][:6]
-                    loaded_file = pd.read_csv(os.path.join(root,file), delimiter=',')
+                    loaded_file = pd.read_csv(os.path.join(root,file), delimiter=',').dropna()
                     if loaded_file['Name'][0] in animal_list \
                             and datetime.strptime(date_range[0], '%d/%m/%Y') <= datetime.strptime(session_date,datestr_format)\
                             <= datetime.strptime(date_range[1], '%d/%m/%Y'):
@@ -174,6 +174,8 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         'pmed': ['PatternPresentation_Rate',0.6],
         'phigh': ['PatternPresentation_Rate',0.1],
         'ppost': ['PatternPresentation_Rate',0.4],
+        'p0.5': ['PatternPresentation_Rate',0.5],
+        'p0': ['PatternPresentation_Rate',0.0],
         'tones4': ['N_TonesPlayed',4], #how many tones of the pattern was presented
         'tones3': ['N_TonesPlayed',3],
         'tones2': ['N_TonesPlayed',2],
@@ -457,11 +459,11 @@ def align2eventScalar(df,pupilsize,pupiltimes, pupiloutliers,beh, dur, filters=(
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             if (eventoutliers == 1.0).sum()/float(len(eventpupil)) > outlierthresh:
-                # print(f'pupil trace for trial {i} incompatible',(eventoutliers == 1).sum())
+                print(f'pupil trace for trial {i} incompatible',(eventoutliers == 1).sum())
                 outliers += 1
-            elif eventpupil.abs().max() > stdthresh:
-                # print(f'pupil trace for trial {i} incompatible')
-                varied += 1
+            # elif eventpupil.abs().max() > stdthresh:
+            #     print(f'pupil trace for trial {i} incompatible')
+            #     varied += 1
 
             else:
                 # print('diff',eventpupil.loc[eventtime - 1-eventshift]-eventpupil.loc[eventtime + 1-eventshift])
@@ -478,7 +480,7 @@ def align2eventScalar(df,pupilsize,pupiltimes, pupiloutliers,beh, dur, filters=(
                 try: zeropadded[:len(eventpupil)] = eventpupil
                 except ValueError:print('bad shape')
                 eventpupil_arr[i] = zeropadded
-    # print(f'Outlier Trials:{outliers}\n Too high varinace trials:{varied}')
+    print(f'Outlier Trials:{outliers}\n Too high varinace trials:{varied}')
     # print(eventpupil_arr.shape)
     index=pd.MultiIndex.from_tuples(list(zip(eventtimez,eventnamez,eventdatez)),names=['time','name','date'])
     eventpupil_df = pd.DataFrame(eventpupil_arr)
@@ -791,16 +793,20 @@ def butter_highpass_filter(data, cutoff, fs, order=5):
     return y
 
 
-def find_good_sessions(df,stage,n_critereon=100):
+def find_good_sessions(df,stage,n_critereon=100,skip=0):
     sessions = df.index.unique()
     gd_sessions = []
-    for sess_ix in sessions:
-        sess_df  = filter_df(df,['e!0',f'stage{stage}',])
-        if sess_df is not None:
-            if sess_df.shape[0] >= n_critereon:
-                gd_sessions.append(sess_ix)
-    gd_sessions_names = [sess[0] for sess in gd_sessions]
-    gd_sessions_dates = [sess[1] for sess in gd_sessions]
+    if skip:
+        gd_sessions_names = [sess[0] for sess in sessions]
+        gd_sessions_dates = [sess[1] for sess in sessions]
+    else:
+        for sess_ix in sessions:
+            sess_df  = filter_df(df,['e!0',f'stage{stage}',])
+            if sess_df is not None:
+                if sess_df.shape[0] >= n_critereon:
+                    gd_sessions.append(sess_ix)
+        gd_sessions_names = [sess[0] for sess in gd_sessions]
+        gd_sessions_dates = [sess[1] for sess in gd_sessions]
 
     return gd_sessions, gd_sessions_names, gd_sessions_dates
 

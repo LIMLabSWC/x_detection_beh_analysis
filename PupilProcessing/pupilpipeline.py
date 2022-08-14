@@ -91,13 +91,15 @@ class Main:
         pclass.uniformSample(self.samplerate)
         pclass.removeOutliers(n_speed=4, n_size=4)
         pclass.interpolate(gapExtension=0.05)
-
+        nan_ix = copy(np.isnan(pclass.pupilDiams))
+        pclass.zScore()
+        pclass.pupilDiams = np.nan_to_num(pclass.pupilDiams)
         # pclass.frequencyFilter()
         pclass.pupilDiams = utils.smooth(pclass.pupilDiams,int(self.han_size/self.samplerate))
         if self.hpass:
             pclass.pupilDiams = utils.butter_highpass_filter(pd.Series(pclass.pupilDiams, index=timeidx),
                                                              self.hpass,1/self.samplerate)
-        pclass.zScore()
+        pclass.pupilDiams[nan_ix.astype(bool)] = np.nan
         pclass.plot(saveName=f'{name}_{pdf_colname}')
 
         return pclass.pupilDiams, pclass.isOutlier
@@ -221,7 +223,7 @@ class Main:
                                                                   animal_pupil_subset, col2norm,unitime_ind))
                         pupil_uni[f'{col2norm}_zscored'] = pupil_processed[0]
                         outs_list.append(pupil_processed[1])
-                    pupil_uni['isout'] = outs_list[-1]
+                    pupil_uni['isout'] = outs_list[3]
 
                     try:
                         df_cols = pupil_uni.columns
@@ -259,7 +261,7 @@ if __name__ == "__main__":
     #     humandates.remove('220523')
 
     # han_size = 1
-    run = Main(humans,humandates,r'pickles\human_class1_3d_200Hz_015Shan_driftcorr_hpass01.pkl',tdatadir,r'W:\humanpsychophysics\HumanXDetection\Data',
+    run = Main(humans,humandates,r'pickles\human_class1_3d_200Hz_015Shan_driftcorr_hpass01_TOM_norm1st.pkl',tdatadir,r'W:\humanpsychophysics\HumanXDetection\Data',
                'pupildata_3d',200.0,han_size=.15,hpass=0.1,aligneddir='aligned_class1',subjecttype='human',
                overwrite=False,dlc_snapshot=1300000)
     run.load_pdata()
