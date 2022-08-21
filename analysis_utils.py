@@ -13,6 +13,7 @@ import scipy
 import circle_fit as cf
 from math import pi
 import warnings
+from scipy import stats as st
 
 def merge_sessions(datadir,animal_list,filestr_cond, date_range, datestr_format='%y%m%d') -> list:
     """
@@ -169,6 +170,10 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         'devdesc': ['PatternID', dev_desc, 'isin'],
         'normtrain': ['PatternID', normtrain, 'isin'],
         'normtest':['PatternID', normtest, 'isin'],
+        'start13':['PatternID', '13;15;17;18'],
+        'start17': ['PatternID', '13;15;17;18'],
+        'start19': ['PatternID', '19;21;23;24'],
+        'start15': ['PatternID', '15;17;19;20'],
         'pnone': ['PatternPresentation_Rate',1.0],
         'plow': ['PatternPresentation_Rate',[0.8,0.9]],
         'pmed': ['PatternPresentation_Rate',0.6],
@@ -194,11 +199,15 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         'stage3': ['Stage',3], # familiarity
         'stage4': ['Stage', 4], # norm-dev
         'stage5': ['Stage', 5], # continous norm-dev
-        'stage6': ['Stage', 6]# continous switch
-        #different start frequencies?
+        'stage6': ['Stage', 6],# continous switch
+        'DO45': ['animal', 'DO45'],
+        'DO46': ['animal', 'DO46'],
+        'DO47': ['animal', 'DO47'],
+        'DO48': ['animal', 'DO48'],
     }
 
     df2filter = data_df
+    df2filter['animal'] = df2filter.index.get_level_values(0)
     for fil in filters:
         column = fildict[fil][0]
         if fil == '4pupil':
@@ -452,7 +461,7 @@ def align2eventScalar(df,pupilsize,pupiltimes, pupiloutliers,beh, dur, filters=(
     for i, eventtime in enumerate(filtered_df[beh]):
         # print(pupiltrace)
         # print(eventtime + timedelta(seconds=float(dur[0])),eventtime + timedelta(seconds=float(dur[1])))
-
+        eventtime = eventtime + timedelta(hours=1)
         eventpupil = copy(pupiltrace.loc[eventtime + timedelta(0,dur[0]): eventtime + timedelta(0,dur[1])])
         eventoutliers = copy(outlierstrace.loc[eventtime + timedelta(0,dur[0]): eventtime + timedelta(0,dur[1])])
         # print((eventoutliers == 0.0).sum(),float(len(eventpupil)))
@@ -480,7 +489,9 @@ def align2eventScalar(df,pupilsize,pupiltimes, pupiloutliers,beh, dur, filters=(
                 try: zeropadded[:len(eventpupil)] = eventpupil
                 except ValueError:print('bad shape')
                 eventpupil_arr[i] = zeropadded
-    print(f'Outlier Trials:{outliers}\n Too high varinace trials:{varied}')
+
+
+    #print(f'Outlier Trials:{outliers}\n Too high varinace trials:{varied}')
     # print(eventpupil_arr.shape)
     index=pd.MultiIndex.from_tuples(list(zip(eventtimez,eventnamez,eventdatez)),names=['time','name','date'])
     eventpupil_df = pd.DataFrame(eventpupil_arr)
