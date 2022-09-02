@@ -14,6 +14,7 @@ import circle_fit as cf
 from math import pi
 import warnings
 from scipy import stats as st
+from confidence_intervals import bootstrap_ci
 
 def merge_sessions(datadir,animal_list,filestr_cond, date_range, datestr_format='%y%m%d') -> list:
     """
@@ -204,6 +205,8 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         'DO46': ['animal', 'DO46'],
         'DO47': ['animal', 'DO47'],
         'DO48': ['animal', 'DO48'],
+        'rig1':['animal', ['DO45','DO47']],
+        'rig2': ['animal', ['DO46', 'DO48']],
     }
 
     df2filter = data_df
@@ -409,11 +412,14 @@ def plot_frametimes(datfile):
     return toplot
 
 
-# def plotvar(data,plot,timeseries):
-#     ci95 = 1*np.std(data,axis=0)/np.sqrt(data.shape[0])
-#     print(ci95.shape)
-#     plot[1].fill_between(timeseries, data.mean(axis=0)+ci95,data.mean(axis=0)-ci95,alpha=0.1)
-#     # plot[1].fill_between(data.mean(axis=0)+ci95,data.mean(axis=0)-ci95,alpha=0.1)
+def plotvar(data,plot,timeseries):
+    #ci95 = 1*np.std(data,axis=0)/np.sqrt(data.shape[0])
+    #print(ci95.shape)
+    #plot[1].fill_between(timeseries, data.mean(axis=0)+ci95,data.mean(axis=0)-ci95,alpha=0.1)
+    #plot[1].fill_between(data.mean(axis=0)+ci95,data.mean(axis=0)-ci95,alpha=0.1)
+    low, high = bootstrap_ci(data)
+    plot[1].fill_between(timeseries, high, low, alpha=0.1)
+    plot[1].fill_between(high, low, alpha=0.1)
 
 def add_datetimecol(df, colname, timefmt='%H:%M:%S.%f'):
 
