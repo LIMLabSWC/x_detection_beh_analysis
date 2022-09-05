@@ -17,9 +17,12 @@ if __name__ == "__main__":
     #old pickle
     #pkl2use = r'/Users/hildelt/Documents/Thesis/gd_analysis/pickles/mouse_normdev_2d_200Hz_025Shan_driftcorr_hpass04_wdlc.pkl'
     # 9. august pickle
-    pkl2use = r'/Users/hildelt/Documents/Thesis/gd_analysis/pickles/mouse_normdev_2d_90Hz_025Shan_driftcorr_hpass025_wdlc_TOM.pkl'
+    # pkl2use = r'/Users/hildelt/Documents/Thesis/gd_analysis/pickles/mouse_normdev_2d_90Hz_025Shan_driftcorr_hpass025_wdlc_TOM.pkl'
     # 12. august pickle - mouse familiarity, first few (should be last)
     #pkl2use = r'/Users/hildelt/Documents/Thesis/gd_analysis/pickles/mouse_fam_2d_90Hz_025Shan_driftcorr_hpass025_wdlc_TOM_norm1st.pkl'
+
+    pkl2use = r'pickles\mouse_normdev_2d_90Hz_025Shan_driftcorr_hpass025_wdlc_TOM_norm1st.pkl'
+
     run = Main(pkl2use, (-1,3))
     paradigm = ['normdev'] #'familiarity' 'altvsrand'
     #paradigm = ['familiarity']
