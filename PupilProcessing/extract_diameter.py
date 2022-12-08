@@ -128,20 +128,34 @@ def deserialize_msgpack(msgpack_bytes):
     return msgpack.unpackb(msgpack_bytes, raw=False, use_list=False)
 
 
-def naming_csv(recording, filename_suffix='extracted_pupils.csv'):
+def naming_csv(recording, filename_suffix='extracted_pupils.csv',dirstyle=r'Y_m_d\it'):
     directory = recording.split('\\')
     print(directory)
-    date = directory[-2]
-    try: date_in_dt = datetime.strptime(date, '%Y_%m_%d')
-    except ValueError: return None
+    if dirstyle == r'Y_m_d\it':
+        date = directory[-2]
+        try: date_in_dt = datetime.strptime(date, '%Y_%m_%d')
+        except ValueError: return None
+        user_info = None
+    elif dirstyle == 'N_D_it':
+        filestr = directory[-1].split('_')
+        date_in_dt  = datetime.strptime(filestr[1],'%y%m%d')
+        user_info = filestr[0]
+    else:
+        print('invalid dir style given')
+        return None
+
     date_in_corstr = datetime.strftime(date_in_dt, '%y%m%d')
     # ''[:2].isnumeric()
     # first make sure I am doing this within the recordings directory
     try:content = pd.read_csv(os.path.join(recording, 'user_info.csv'), index_col=0)
     except pd.errors.ParserError: print('error')
-    print(content['value'])
-    animals = ['DO45', 'DO46', 'DO47', 'DO48','ES01','ES02','ES03']
-    name_val = content['value']['name']
+    except pd.errors.EmptyDataError: print('error: empty')
+    animals = ['DO45', 'DO46', 'DO47', 'DO48','ES01','ES02','ES03','DO50','DO51','DO52','DO53']
+    animals.extend([f'DO{e}' for e in range(54,60)])
+    if not user_info:
+        name_val = content['value']['name']
+    else:
+        name_val = user_info
     if type(name_val) == str:
         name_val = name_val.upper()
         if name_val[:2].upper() == 'D0':
@@ -194,14 +208,21 @@ if __name__ == "__main__":
 
     # recordings = args.recordings
     recordings = []
-    for root, folder, file in os.walk(r'W:\mouse_pupillometry\mousenormdev_swap'):
+    for root, folder, file in os.walk(r'W:\mouse_pupillometry\mouse_hf'):
+        currdir = os.path.split(root)[-1]
         if root.split('\\')[-1].isnumeric() and root.split('\\')[-1] != 'exports':
             recordings.append(root)
+        elif len(currdir.split('_')) >= 3:
+            if all([currdir.split('_')[1].isnumeric(), currdir.split('_')[2].isnumeric()]):
+                recordings.append(root)
+
+    if len(recordings) == 0:
+        print('No recordings found')
 
     for rec in recordings:
-        file_name = naming_csv(rec)
+        file_name = naming_csv(rec,dirstyle='N_D_it')
         if file_name is not None:
-            process_recording(recording=rec, csv_out=file_name, overwrite=True)
+            process_recording(recording=rec, csv_out=file_name, overwrite=False)
         else:
             print(file_name,'None file name')
     # main(recordings=[r'W:\humanpsychophysics\HumanXDetection\Data\2022_01_19\000'], csv_out='test.csv1', overwrite=True)

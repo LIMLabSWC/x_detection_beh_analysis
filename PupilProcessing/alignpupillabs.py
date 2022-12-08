@@ -39,17 +39,19 @@ def correctdrift(timeseries, syncseries1, syncseries2) -> pd.Series:
 
     timeseries0 = timeseries.iloc[0]
 
-    syncdiff = syncseries1 - syncseries2  # series with diff between clocks, get total drfit between clocks
+    syncdiff = syncseries1 - (syncseries2 - (syncseries2 - syncseries1)[
+        0])  # series with diff between clocks, get total drfit between clocks
     # +ve means bonsai drifting away from plabs
-    drift_scalar = (syncdiff.iloc[-1] - syncdiff.iloc[0])/(syncseries1.iloc[-1]-syncseries1.iloc[0])  # total drift/ time elasped plabs
+    drift_scalar = (syncdiff.iloc[-1] - syncdiff.iloc[0]) / (
+                syncseries1.iloc[-1] - syncseries1.iloc[0])  # total drift/ time elasped plabs
     if math.isnan(drift_scalar) or abs(drift_scalar) > 0.1:
-        if drift_scalar<0:
+        if drift_scalar < 0:
             drift_scalar = -0.000125
         else:
-            drift_scalar= 0.000125
+            drift_scalar = 0.000125
     print(f' first {syncdiff.iloc[0]} last{syncdiff.iloc[-1]}, scalar {drift_scalar}')
     # correct drift dt*scale factor3.3
-    corrected_ts = timeseries.apply(lambda t: timeseries0+((t-timeseries0)/(1+drift_scalar)))
+    corrected_ts = timeseries.apply(lambda t: t + ((t - timeseries0) * (-drift_scalar)))
     print(f'original endtime: {timeseries.iloc[-1]},correct endtime: {corrected_ts.iloc[-1]}')
     # corrected_ts = timeseries
     return corrected_ts
@@ -123,6 +125,7 @@ class Main:
         self.findfiles()
         for animal in self.toprocess_dict:
             for date in self.toprocess_dict[animal]:
+
                 if 'extracted_pupilsfile' in self.toprocess_dict[animal][date].keys():
                     savename = f'{animal}_{date}_pupildata.csv'
                     output_fullpath = f"{join(self.datadir,self.aligned_dir,savename.replace('.csv','_3d.csv'))}"
@@ -148,26 +151,30 @@ class Main:
                         aligned3dsave.to_csv(join(output_fullpath),index=False)
                     except KeyError:
                             print('keyerror')
+                else:
+                    print('missing extracted pupil file')
 
 
 if __name__ == '__main__':
     subject_type = 'mice'
 
     if subject_type in ['mice', 'rats']:
-        animals = ['DO45','DO46','DO47','DO48','ES01','ES02','ES03']
-        dates = ['13/06/2022', '31/12/2022']
+        animals = ['DO45','DO46','DO47','DO48','ES01','ES02','ES03','DO50','DO51','DO53']
+        dates = ['01/10/2022', '31/12/2022']
         tdatadir = r'C:\bonsai\data\Dammy'
-        protocol_dirname = r'W:\mouse_pupillometry\mousenormdev_swap'
+        protocol_dirname = r'W:\mouse_pupillometry\mouseprobreward'
         protocol_aligneddir = f'aligned_{os.path.split(protocol_dirname)[-1]}'
 
         td_df = pd.concat(merge_sessions(tdatadir,animals,'TrialData',dates),sort=False,axis=0,)
         for col in td_df.keys():
-                    if col.find('Time') != -1 or col.find('Start') != -1 or col.find('End') != -1:
-                        if col.find('Wait') == -1 and col.find('dt') == -1:
-                            add_datetimecol(td_df,col)
-        valid_sessions = find_good_sessions(td_df,3,50,skip=1)
+            if col.find('Time') != -1 or col.find('Start') != -1 or col.find('End') != -1:
+                if col.find('Wait') == -1 and col.find('dt') == -1 and col.find('Harp') == -1 and col.find('Bonsai') == -1:
+                    # print(col)
+                    try:add_datetimecol(td_df,col)
+                    except AttributeError: print(col)
+        valid_sessions = find_good_sessions(td_df,4,50,skip=1)
         run = Main(valid_sessions[1],valid_sessions[2],protocol_dirname,
-                   tdatadir,protocol_aligneddir,overwrite=1,merge=0)
+                   tdatadir,protocol_aligneddir,overwrite=0,merge=0)
         run.main_loop()
 
     else:
@@ -178,5 +185,5 @@ if __name__ == '__main__':
         humans = [f'Human{i}' for i in range(28,33)]
         humandates = ['220518','220523', '220524', '220530','220627']
         run = Main(humans,humandates,r'W:\humanpsychophysics\HumanXDetection\Data',r'C:\bonsai\data\Hilde\Human\timeSyncs',
-                   'aligned_class1',overwrite=False,merge=0)
+                   'aligned_class1',overwrite=True,merge=0)
         run.main_loop()
