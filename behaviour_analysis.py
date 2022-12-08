@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import os
-from copy import copy
+from copy import deepcopy as copy
 import time
 from datetime import datetime, timedelta
 from collections import OrderedDict
@@ -10,7 +10,9 @@ import analysis_utils as utils
 import pylab
 from sklearn.linear_model import LinearRegression
 from math import floor,ceil
-
+import copy
+import scipy.signal
+import psychophysicsUtils
 
 
 class TDAnalysis:
@@ -20,25 +22,25 @@ class TDAnalysis:
 
     def __init__(self, tdatadir, animal_list, daterange,):
         plt.style.use("seaborn-white")
-        self.trial_data = utils.merge_sessions(tdatadir,animal_list,'TrialData',daterange)
-        self.trial_data = pd.concat(self.trial_data,sort=False,axis=0)
+        self.trialData = utils.merge_sessions(tdatadir, animal_list, 'TrialData', daterange)
+        self.trialData = pd.concat(self.trialData, sort=False, axis=0)
         try:
-            self.trial_data = self.trial_data.drop(columns=['RewardCross_Time','WhiteCross_Time'])
+            self.trialData = self.trialData.drop(columns=['RewardCross_Time', 'WhiteCross_Time'])
         except KeyError:
             pass
         self.animals = animal_list
         self.anon_animals = [f'Animal {i}' for i in range(len(self.animals))]  # give animals anon labels
-        self.dates = sorted(self.trial_data.loc[self.animals].index.to_frame()['Date'].unique())
+        self.dates = sorted(self.trialData.loc[self.animals].index.to_frame()['Date'].unique())
 
         # add datetime cols
-        for col in self.trial_data.keys():
+        for col in self.trialData.keys():
             if col.find('Time') != -1 or col.find('Start') != -1 or col.find('End') != -1:
-                if col.find('Wait') == -1 and col.find('dt') == -1:
-                    utils.add_datetimecol(self.trial_data,col)
+                if col.find('Wait') == -1 and col.find('dt') == -1 and col.find('Lick_Times') == -1:
+                    utils.add_datetimecol(self.trialData, col)
 
         # add reaction time col
-        stim1_tdelta = self.trial_data['Stim1_Duration'].apply(lambda e: timedelta(0,e))
-        self.trial_data['Reaction_time'] = self.trial_data['Trial_End_dt']-(self.trial_data['Trial_Start_dt'] +
+        stim1_tdelta = self.trialData['Stim1_Duration'].apply(lambda e: timedelta(0, e))
+        self.trialData['Reaction_time'] = self.trialData['Trial_End_dt'] - (self.trialData['Trial_Start_dt'] +
                                                                             stim1_tdelta)
 
     def beh_daily(self, plot=False, filters=('b1',)) -> (dict, plt.subplots):
@@ -48,7 +50,7 @@ class TDAnalysis:
             for date in self.dates:
                 try:
                     statnames = ['Trials Done', 'NonViol Trials', 'Early Rate', 'Error Rate']
-                    data_day = utils.filter_df(self.trial_data.loc[animal, date], filters)
+                    data_day = utils.filter_df(self.trialData.loc[animal, date], filters)
                     trials_done_day = data_day.shape[0]
                     correct_trials = utils.filter_df(data_day, ['a1']).shape[0]
                     try:
@@ -108,6 +110,64 @@ class TDAnalysis:
 
         return stats_dict, (fig, ax)
 
+    def add_data_dict(self):
+        self.data = {}
+        for idx in self.trialData.index.unique():
+            sess_name = '_'.join(idx)
+            self.data[sess_name] = psychophysicsUtils.pupilDataClass
+            self.data[sess_name].trialData = copy.deepcopy(self.trialData.loc[idx])
+
+    def get_aligned_events(self, eventname, harp_event, window, timeshift=0.0, harp_event_name='Lick',
+                           animals=None,animals_omit=None,dates=None,dates_omit=None,plot=True,lfilt=None):
+
+        if animals is None:
+            animals = self.animals
+        if dates is None:
+            dates = self.dates
+        if dates_omit:
+            [dates.remove(e) for e in dates_omit]
+        if animals_omit:
+            [animals.remove(e) for e in animals_omit]
+
+        fig,axes = plt.subplots(1,len(animals))
+
+        if plot:
+            for i, (ax,animal) in enumerate(zip(axes,animals)):
+                animal_cnt = 0
+                for d,date in enumerate(dates):
+                    sess_name = f'{animal}_{date}'
+                    # sess_mat = copy(utils.align_nonpuil(self.data[sess_name].trialData[eventname],
+                    #                                self.data[sess_name].harpmatrices[harp_event], window,timeshift))
+                    if date not in self.trialData.index.get_level_values('Date'):
+                        # print('Date not in trialdata, skipping')
+                        continue
+
+                    sess_mat = copy.deepcopy(utils.align_nonpuil(self.trialData.loc[(animal,date)][eventname],
+                                                                 self.harpmatrices[sess_name][harp_event], window,
+                                                                 self.trialData.loc[(animal,date)]['Offset'],
+                                                                 timeshift))
+                    for e, event in enumerate(sess_mat):
+                        fs = 0.001
+                        epoch_events = np.full(int((window[1]-window[0])/fs)+1,0)
+                        # print(list(sess_mat.values())[0])
+                        event=copy.deepcopy(event)
+                        eventz = sess_mat[event]
+
+                        epoch_events[((sess_mat[event]-window[0])/fs).astype(int)] = 1
+
+                        if lfilt:
+                            epoch_events = utils.butter_highpass_filter(epoch_events,lfilt,1/fs,filtype='low')
+                            b,a = s
+                        epoch_events[epoch_events==0] = np.nan
+                        axes[i].scatter(epoch_events, epoch_events*(animal_cnt-e), c=f'C{d}', marker='.')
+                        axes[i].axvline(0, ls='--', c='k')
+                        axes[i].axvline(0.5, ls='--', c='grey')
+                    # ax.axhline(animal_cnt+20,ls='-',c='k')
+                    animal_cnt -= len(sess_mat)
+                    axes[i].set_title(f'{harp_event_name} aligned to {eventname.replace("dt","").replace("_", " ").replace("Gap","X")}\n'
+                                      f'{animal}',size=10)
+                    axes[i].set_yticks([])
+        return fig,axes
 
 if __name__ == '__main__':
     plt.rcParams["figure.figsize"] = [8.00, 6.00]
@@ -115,12 +175,38 @@ if __name__ == '__main__':
 
     datadir = r'C:\bonsai\data'
     animals = [
-                'DO45',
-                'DO46',
-                'DO47',
-                'DO48'
+                'DO54',
+                'DO55',
+                'DO56',
+                'DO57'
                ]
 
-    dates = ['13/06/2022', 'now']  # start/end date for analysis
+    dates = ['25/10/2022', '08/11/2022']  # start/end date for analysis
+    # dates = ['02/11/2022', '08/11/2022']  # start/end date for analysis
     td_obj = TDAnalysis(datadir,animals,dates)
-    td_obj.day2day = td_obj.beh_daily(True)
+
+
+    # event raster
+    td_obj.add_data_dict()
+    # harpmatrices = utils.get_event_matrix(td_obj,td_obj.data,r'W:\mouse_pupillometry\mouse_hf\harpbins',)
+    td_obj.harpmatrices = utils.get_event_matrix(td_obj,td_obj.data,r'W:\mouse_pupillometry\mouse_hf\harpbins',)
+
+    # for mat_name in harpmatrices:
+    #     td_obj.data[mat_name].harpmatrices = copy.deepcopy(dict())
+    #     td_obj.data[mat_name].harpmatrices = copy.deepcopy(harpmatrices[mat_name])
+    plt.ion()
+    td_obj.lickrasters_whitenoise = td_obj.get_aligned_events('Gap_Time_dt',2,(-5.0,5.0),)
+    # td_obj.lickrasters_trialstart = td_obj.get_aligned_events('Trial_Start_dt',0,(-1.0,10.0),)
+
+    dates2plot = ['221103','221104','221107','221108']
+    fig,ax = plt.subplots(len(td_obj.animals),len(dates2plot),sharex='all',sharey='all')
+    for di,d in enumerate(dates2plot):
+        for a,animal in enumerate(td_obj.animals):
+            ax[a][di].plot(td_obj.trialData.loc[animal,d]['Early_Licks'].to_numpy(),label=animal,c=f'C{a}')
+            ax[a][di].legend(loc=1)
+            ax[a][di].set_ylim((0,25))
+            ax[a][di].set_yticks([0,10,20])
+        ax[a][di].set_xlabel('Trial number',fontsize=14)
+    fig.text(0.075,0.5,'Number of early licks',rotation=90,ha='left', va='center',fontsize=14)
+    fig.text(0.5,0.95,f'Change in early licks over trials for {" ".join(dates2plot)}',ha='center', va='top',fontsize=14)
+    fig.savefig(rf'W:\mouse_pupillometry\figures\hf_licks\n_early_licks_{"_".join(dates2plot)}.svg',bbox_inches='tight')

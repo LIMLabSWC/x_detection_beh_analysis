@@ -2,7 +2,7 @@ from psychophysicsUtils import pupilDataClass
 import pandas as pd
 import numpy as np
 import os
-from copy import copy
+from copy import deepcopy as copy
 import time
 from datetime import datetime, timedelta
 import matplotlib
@@ -15,6 +15,7 @@ from math import pi
 import warnings
 from scipy import stats as st
 from confidence_intervals import bootstrap_ci
+import glob
 
 def merge_sessions(datadir,animal_list,filestr_cond, date_range, datestr_format='%y%m%d') -> list:
     """
@@ -23,7 +24,7 @@ def merge_sessions(datadir,animal_list,filestr_cond, date_range, datestr_format=
     :param animal_list: list (str) of animals to incluse
     :param filestr_cond: str specifying data filetype. Trial/SummaryData
     :param datestr_format: list len 2. start and end date in %d/%m/%Y format
-    :return: concatenated df for aniimal_animal list over date range
+    :return: concatenated df for animal_animal list over date range
     """
 
     file_df = []
@@ -68,13 +69,38 @@ def merge_sessions(datadir,animal_list,filestr_cond, date_range, datestr_format=
                                 sess_part = file.split('.')[0][-1]
                                 loaded_file['Session'] = np.full_like(name_series,sess_part)
                                 loaded_file = loaded_file.set_index(['Name','Date']).sort_index()
+
+                                # Process harp and bonsai time column variables to avoid mismatch due to name
+                                # Keep <Time> as time of day and <time> as ticks or seconds
+                                if 'Harp_Time' in loaded_file.columns:
+                                    loaded_file.rename(index=str,columns={'Harp_Time': 'Harp_time'},)
+                                if 'Bonsai_Time' in loaded_file.columns:
+                                    loaded_file.rename(index=str,columns={'Bonsai_Time': 'Bonsai_time'},inplace=True)
+                                if 'Bonsai_time' in loaded_file.columns:
+                                    if str(loaded_file['Bonsai_time'].iloc[0]).isnumeric():
+                                        time_conv = [datetime(1, 1, 1) + timedelta(microseconds=e / 10)
+                                                     for e in loaded_file['Bonsai_time']].copy()
+                                        loaded_file['Bonsai_time_dt'] = time_conv
+                                    else:
+                                        add_datetimecol(loaded_file,'Bonsai_time')
+                                # Add offset column for daylight savings
+                                daylightsavings = np.array([[210328,211031],[220327,221030],[220326,221029]])  # daylight saving period
+                                _dst_arr = daylightsavings - int(session_date)
+                                if all(_dst_arr.prod(axis=1) > 0):
+                                     offset_series = np.full_like(name_series,0.0)
+                                else:
+                                    offset_series = np.full_like(name_series, 1.0)
+
+                                loaded_file['Offset'] = offset_series
+
                                 file_df.append(loaded_file.dropna())
+
                         except pd.errors.EmptyDataError:
                             print('Empty data frame')
 
         else:
             print('File string condition is not valid')
-            return None
+            return [None]
 
     return file_df
 
@@ -107,40 +133,42 @@ def filter_df(data_df, filters) -> pd.DataFrame:
             see filtdict for full description
     :return: final filtered dataframe
     """
+    if 'Pattern_Type' in data_df.columns:
+        dev_nonorder = []
+        dev_repeat = []
+        unique_devs = sorted(data_df[data_df['Pattern_Type']>0]['PatternID'].unique())
+        for dev in unique_devs:
+            devarray = np.array(dev.split(';')).astype(int)
+            if devarray[1] == devarray[2] or devarray[2] == devarray[3]:
+                dev_repeat.append(dev)
+            else:
+                dev_nonorder.append(dev)
 
-    dev_nonorder = [] 
-    dev_repeat = []
-    unique_devs = sorted(data_df[data_df['Pattern_Type']>0]['PatternID'].unique())
-    for dev in unique_devs:
-        devarray = np.array(dev.split(';')).astype(int)
-        if devarray[1] == devarray[2] or devarray[2] == devarray[3]: 
-            dev_repeat.append(dev)
-        else:
-            dev_nonorder.append(dev)
+        dev_desc = []
+        dev_assc = []
+        for dev in unique_devs:
+            _parray = np.array(dev.split(';')).astype(int)
+            diff_parray = np.diff(_parray)
 
-    dev_desc = []
-    dev_assc = []
-    for dev in unique_devs:
-        _parray = np.array(dev.split(';')).astype(int)
-        diff_parray = np.diff(_parray)
+            if all(diff_parray >= 0):
+                dev_assc.append(dev)
+            else:
+                dev_desc.append(dev)
 
-        if all(diff_parray >= 0):
-            dev_assc.append(dev)
-        else:
-            dev_desc.append(dev)
+        # subset normals
+        unique_norms = sorted(data_df[data_df['Pattern_Type']==0]['PatternID'].unique())
+        normtrain_arr = [np.array([15,17,19,20]),np.array([20,22,24,25])]
 
-    # subset normals
-    unique_norms = sorted(data_df[data_df['Pattern_Type']==0]['PatternID'].unique())
-    normtrain_arr = [np.array([15,17,19,20]),np.array([20,22,24,25])]
-
-    normtrain = []
-    normtest = []
-    for pat in unique_norms:
-        _parray = np.array(pat.split(';')).astype(int)
-        if np.all(normtrain_arr != _parray):
-            normtest.append(pat)
-        else:
-            normtrain.append(pat)
+        normtrain = []
+        normtest = []
+        for pat in unique_norms:
+            _parray = np.array(pat.split(';')).astype(int)
+            if np.all(normtrain_arr != _parray):
+                normtest.append(pat)
+            else:
+                normtrain.append(pat)
+    else:
+        dev_repeat,dev_assc,dev_desc,dev_nonorder,normtrain,normtest = None,None,None,None,None,None
 
     # get all time=00:00:00
     all_dates = data_df.index.to_frame()['Date'].unique()
@@ -153,16 +181,16 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         'a3': ['Trial_Outcome', -1, '!='], # fail, miss or early
         'b0': ['WarmUp', True],
         'b1': ['WarmUp', False],
-        'c0': ['Tone_Position', 0], # Tone coming before X
-        'c1': ['Tone_Position', 1], # Tone coming after X
-        'd0': ['Pattern_Type', 0], # Normal pattern
-        'd!0': ['Pattern_Type', 0, '>'], # deviant pattern
+        'c0': ['Tone_Position', 0],  # Tone coming before X
+        'c1': ['Tone_Position', 1],  # Tone coming after X
+        'd0': ['Pattern_Type', 0],  # Normal pattern
+        'd!0': ['Pattern_Type', 0, '>'],  # deviant pattern
         'd-1': ['Pattern_Type', -1], #
         'd1': ['Pattern_Type', 1], #
         'd2': ['Pattern_Type', 2], #
         'd3': ['Pattern_Type', 3], #
         'd4': ['Pattern_Type', [1,3]], #
-        'e!0': ['ToneTime_dt',all_dates_t0,'notin'], #There was a tone, if 'c0'
+        'e!0': ['ToneTime_dt',all_dates_t0,'notin'],  # There was a tone, if 'c0'
         'e=0': ['ToneTime_dt',all_dates_t0,'isin'], # There was no tone
         '4pupil': ['na'],
         'devrep':['PatternID',dev_repeat,'isin'], #
@@ -182,7 +210,7 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         'ppost': ['PatternPresentation_Rate',0.4],
         'p0.5': ['PatternPresentation_Rate',0.5],
         'p0': ['PatternPresentation_Rate',0.0],
-        'tones4': ['N_TonesPlayed',4], #how many tones of the pattern was presented
+        'tones4': ['N_TonesPlayed',4],  # how many tones of the pattern was presented
         'tones3': ['N_TonesPlayed',3],
         'tones2': ['N_TonesPlayed',2],
         'tones1': ['N_TonesPlayed',1],
@@ -193,21 +221,32 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         's2': ['Session_Block',2],
         's3': ['Session_Block',3], # session block in which deviants are presented
         'sess_a': ['Session', 'a'],
-        'sess_b': ['Session', 'b'], # if there are more than one session in one day per animal
+        'sess_b': ['Session', 'b'],  # if there are more than one session in one day per animal
         'stage0': ['Stage', 0],
         'stage1': ['Stage', 1],
-        'stage2': ['Stage', 2], # training
-        'stage3': ['Stage',3], # familiarity
-        'stage4': ['Stage', 4], # norm-dev
-        'stage5': ['Stage', 5], # continous norm-dev
-        'stage6': ['Stage', 6],# continous switch
+        'stage2': ['Stage', 2],  # training
+        'stage3': ['Stage',3],  # familiarity
+        'stage4': ['Stage', 4],  # norm-dev
+        'stage5': ['Stage', 5],  # continous norm-dev
+        'stage6': ['Stage', 6],  # continous switch
         'DO45': ['animal', 'DO45'],
         'DO46': ['animal', 'DO46'],
         'DO47': ['animal', 'DO47'],
         'DO48': ['animal', 'DO48'],
         'rig1':['animal', ['DO45','DO47']],
         'rig2': ['animal', ['DO46', 'DO48']],
+        '0.5_0': ['0.5_order', 0],
+        '0.5_1': ['0.5_order', 1],
+        '0.5_2': ['0.5_order', 2],
+        '0.5_3': ['0.5_order', 3],
+        '0.5_-1': ['0.5_order', -1],
+        '-1tone': ['Tone_Position_diff',1.0],
+        '-1rew': ['Trial_Outcome_diff',-1.0],
+
+
     }
+    for e in np.linspace(0,1,11):
+        fildict[f'bin_prate_{e}'] = ['PatternPresentation_Rate_roll', e]
 
     df2filter = data_df
     df2filter['animal'] = df2filter.index.get_level_values(0)
@@ -428,22 +467,33 @@ def add_datetimecol(df, colname, timefmt='%H:%M:%S.%f'):
     date_array_dt = [datetime.strptime(d,'%y%m%d') for d in date_array]
     for i,t in enumerate(df[colname]):
         if isinstance(t,str):
-            if len(t) > 15:
-                datetime_arr.append((datetime.strptime(t[:-1], timefmt)))
+            t = t.split('+')[0]
+            t_split = t.split('.')
+            t_hms = t_split[0]
+            if len(t_split) == 2:
+                t_ms = t.split('.')[1]
             else:
-                try:datetime_arr.append((datetime.strptime(t,'%H:%M:%S')))
-                except ValueError or TypeError: print(t,df.index[i])
+                t_ms = 0
+            try:t_hms_dt = datetime.strptime(t_hms,'%H:%M:%S')
+            except ValueError: print(t_hms)
+            t_ms_micros = round(float(f'0.{t_ms}'),6)*1e6
+            t_dt = t_hms_dt.replace(microsecond=int(t_ms_micros))
+            datetime_arr.append(t_dt)
+
         else:
             datetime_arr.append(np.nan)
-            print(t,df.index[i])
-    merged_date_array = [e.replace(year=d.year,month=d.month,day=d.day) for d,e in zip(date_array_dt,datetime_arr)]
+            # print(t,df.index[i])
+    try:merged_date_array = [e.replace(year=d.year,month=d.month,day=d.day) for d,e in zip(date_array_dt,datetime_arr)]
+    except AttributeError:
+        print('Attribute error, add dt col')
+        return None
     try:df[f'{colname}_dt'] = np.array(merged_date_array)
-    except:ValueError
+    except ValueError: print('Value error, add dt col ')
 
-def align2eventScalar(df,pupilsize,pupiltimes, pupiloutliers,beh, dur, filters=('4pupil','b1','c1'), baseline=False,eventshift=0,
-                      outlierthresh=0.5,stdthresh=3,subset=None) -> pd.DataFrame:
+def align2eventScalar(df, timeseries_data, pupiltimes, pupiloutliers, beh, dur, filters=('4pupil', 'b1', 'c1'), baseline=False, eventshift=0,
+                      outlierthresh=0.5, stdthresh=3, subset=None) -> pd.DataFrame:
 
-    pupiltrace = pd.Series(pupilsize,index=pupiltimes)
+    dataseries = pd.Series(timeseries_data, index=pupiltimes)
     outlierstrace = pd.Series(pupiloutliers,index=pupiltimes)
     filtered_df = filter_df(df,filters)
     dur = np.array(dur)
@@ -454,7 +504,7 @@ def align2eventScalar(df,pupilsize,pupiltimes, pupiloutliers,beh, dur, filters=(
 
     eventtimez = filtered_df[beh]
     if len(eventtimez)==0:
-        return pd.DataFrame(np.array([]))
+        return pd.DataFrame(np.array([])),np.nan
     eventsess = filtered_df.index
     eventdatez = [e[1] for e in eventsess]
     eventnamez = [e[0] for e in eventsess]
@@ -465,17 +515,18 @@ def align2eventScalar(df,pupilsize,pupiltimes, pupiloutliers,beh, dur, filters=(
     dur = dur + eventshift
         # print(dur)
     for i, eventtime in enumerate(filtered_df[beh]):
-        # print(pupiltrace)
+        # print(dataseries)
         # print(eventtime + timedelta(seconds=float(dur[0])),eventtime + timedelta(seconds=float(dur[1])))
-        eventtime = eventtime + timedelta(hours=1)
-        eventpupil = copy(pupiltrace.loc[eventtime + timedelta(0,dur[0]): eventtime + timedelta(0,dur[1])])
+        eventtime = eventtime + timedelta(hours=float(df['Offset'].iloc[i]))
+        eventpupil = copy(dataseries.loc[eventtime + timedelta(0,dur[0]): eventtime + timedelta(0,dur[1])])
         eventoutliers = copy(outlierstrace.loc[eventtime + timedelta(0,dur[0]): eventtime + timedelta(0,dur[1])])
         # print((eventoutliers == 0.0).sum(),float(len(eventpupil)))
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            if (eventoutliers == 1.0).sum()/float(len(eventpupil)) > outlierthresh:
+            if eventoutliers.sum()/float(eventpupil.shape[0]) > outlierthresh:  # change back outlierthresh
                 print(f'pupil trace for trial {i} incompatible',(eventoutliers == 1).sum())
                 outliers += 1
+                continue
             # elif eventpupil.abs().max() > stdthresh:
             #     print(f'pupil trace for trial {i} incompatible')
             #     varied += 1
@@ -486,15 +537,27 @@ def align2eventScalar(df,pupilsize,pupiltimes, pupiloutliers,beh, dur, filters=(
                     baseline_dur = 1.0
                     with warnings.catch_warnings():
                         warnings.simplefilter("ignore")
-                        baseline_mean = np.nanmean(eventpupil.loc[eventtime - timedelta(0,baseline_dur-eventshift):
-                                                   eventtime + timedelta(0,eventshift)])
-                        eventpupil = eventpupil - baseline_mean
-                    # eventpupil = (eventpupil-eventpupil.mean())/eventpupil.std()
-            if len(eventpupil)>0:
+                        baseline_period = eventpupil.loc[eventtime - timedelta(0,baseline_dur-eventshift):
+                                                   eventtime + timedelta(0,eventshift)]
+                        baseline_outs = eventoutliers.loc[eventtime - timedelta(0,baseline_dur-eventshift):
+                                                   eventtime + timedelta(0,eventshift)]
+                        if baseline_outs.mean() > .75:  # change back!
+                            outliers += 1
+                            print(outliers)
+                            continue
+                        else:
+                            # baseline_mean = np.nanmean(baseline_period[np.invert(baseline_outs)])
+                            baseline_mean = np.nanmean(baseline_period)
+                            eventpupil = (eventpupil - baseline_mean)
+                            # eventpupil = (eventpupil-np.nanmean(baseline_period))/np.nanstd(baseline_period)
                 zeropadded = np.full_like(eventpupil_arr[0],0.0)
-                try: zeropadded[:len(eventpupil)] = eventpupil
+                try:
+                    zeropadded[:len(eventpupil)] = eventpupil
+                    if len(np.unique(zeropadded)) < 10:
+                        print('weird')
+                        continue
+                    eventpupil_arr[i] = zeropadded
                 except ValueError:print('bad shape')
-                eventpupil_arr[i] = zeropadded
 
 
     #print(f'Outlier Trials:{outliers}\n Too high varinace trials:{varied}')
@@ -510,11 +573,11 @@ def align2eventScalar(df,pupilsize,pupiltimes, pupiloutliers,beh, dur, filters=(
         middles = nonans_eventpuil[int(midpnt-subset/2.0):int(midpnt+subset/2.0)]
         lasts = nonans_eventpuil[-subset:,:]
         # print(firsts.shape,middles.shape,lasts.shape)
-        return [firsts,middles,lasts]
+        return [firsts,middles,lasts],outliers
     else:
         if nonans_eventpuil.size < 10:
             pass
-        return nonans_eventpuil.iloc[:,:-1]
+        return nonans_eventpuil.iloc[:,:-1],outliers
 
 
 def getpatterntraces(data, patterntypes,beh,dur, eventshifts=None,baseline=True,subset=None,regressed=False,
@@ -538,8 +601,8 @@ def getpatterntraces(data, patterntypes,beh,dur, eventshifts=None,baseline=True,
             elif coord == 'y':
                 pupil2use = data.yc
             else:
-                # pupil2use = data.pupildf['diameter_3d_ffilt']
-                pupil2use = data.pupildf[pupilmetricname]
+                try:pupil2use = data.pupildf[pupilmetricname]
+                except AttributeError: pass
 
             if dev_subsetdf is None:
                 td2use = data.trialData
@@ -551,7 +614,6 @@ def getpatterntraces(data, patterntypes,beh,dur, eventshifts=None,baseline=True,
                 if regressed:
                     pupil2use = data[name].pupilRegressed
                 else:
-                    # pupil2use = data[name].pupildf['diameter_3d_ffilt']
                     pupil2use = data[name].pupildf[pupilmetricname]
 
                 td2use = data[name].trialData
@@ -568,9 +630,12 @@ def getpatterntraces(data, patterntypes,beh,dur, eventshifts=None,baseline=True,
         try:tone_aligned_pattern = align2eventScalar(td2use,pupil2use,times2use,
                                                  outs2use,beh,
                                                  dur,patternfilter,
-                                                 outlierthresh=0.5,stdthresh=4,
+                                                 outlierthresh=0.5,stdthresh=2,
                                                  eventshift=eventshifts[i],baseline=baseline,subset=subset)
         except IndexError: print('broken')
+        n_outliers = tone_aligned_pattern[1]
+        # print(f'# Outlier trials = {n_outliers} for {patternfilter}')
+        tone_aligned_pattern = tone_aligned_pattern[0]
         if subset is not None:
             firsts.append(tone_aligned_pattern[0])
             mids.append(tone_aligned_pattern[1])
@@ -585,7 +650,7 @@ def getpatterntraces(data, patterntypes,beh,dur, eventshifts=None,baseline=True,
             _pattern_tonealigned.append(pd.concat(lasts,axis=0))
 
         list_eventaligned.append(pd.concat(_pattern_tonealigned, axis=0))
-    return list_eventaligned
+    return list_eventaligned,n_outliers
 
 
 def plot_eventaligned(eventdata_list, eventnames, dur, beh, plotax=None, pltsize=(12, 9), plotcols=None, shift=[0.0]):
@@ -655,7 +720,7 @@ def plotvar(data,plot,timeseries):
 
 
 def align_wrapper(datadict,filters,align_beh, duration, alignshifts=None, plotsess=False, plotlabels=None,
-                  plottitle=None, xlabel=None,animal_labels=None,plotsave=False,coord=None,
+                  plottitle=None, xlabel=None,animal_labels=None,plotsave=False,coord=None,baseline=True,
                   pupilmetricname='rawarea_zscored'):
     aligned_dict = dict()
     aligned_list = []
@@ -668,8 +733,9 @@ def align_wrapper(datadict,filters,align_beh, duration, alignshifts=None, plotse
             return None
     for sessix, sess in enumerate(datadict.keys()):
         aligned_dict[sess] = getpatterntraces(datadict[sess],filters,align_beh,duration,
-                                              baseline=True, eventshifts=alignshifts,coord=coord,
-                                              pupilmetricname=pupilmetricname)
+                                              baseline=baseline, eventshifts=alignshifts,coord=coord,
+                                              pupilmetricname=pupilmetricname)[0]
+
         sess_trials[sess] = [s.shape[0] for s in aligned_dict[sess]]
         if plotsess:
             sess_plot = plot_eventaligned(aligned_dict[sess],plotlabels,duration,plottitle)
@@ -744,11 +810,23 @@ def format_timestr(timestr_series) -> (pd.Series, pd.Series):
     :return:
     """
     s=timestr_series
-    before = time.time()
-    try:formatted=s.where(s.apply(lambda e: len(e.split(':')[-1]))>3,s.apply(lambda e: f'{e}.0'))
-    except AttributeError: print('bad time')
-    dt_series = [datetime.strptime(e,'%H:%M:%S.%f') for e in formatted]
-    return formatted, dt_series
+    datetime_arr = []
+    for t in s:
+        if isinstance(t, str):
+            t_split = t.split('.')
+            t_hms = t_split[0]
+            if len(t_split) == 2:
+                t_ms = t.split('.')[1]
+            else:
+                t_ms = 0
+            t_hms_dt = datetime.strptime(t_hms, '%H:%M:%S')
+            t_ms_micros = round(float(f'0.{t_ms}'), 6) * 1e6
+            t_dt = t_hms_dt.replace(microsecond=int(t_ms_micros))
+            datetime_arr.append(t_dt)
+
+        else:
+            datetime_arr.append(np.nan)
+    return datetime_arr
 
 def smooth(x,window_len=11,window='hanning'):
     """smooth the data using a window with requested size.
@@ -797,15 +875,23 @@ def smooth(x,window_len=11,window='hanning'):
     return y[int(window_len/2-1):-int(window_len/2)]
 
 
-def butter_highpass(cutoff, fs, order=5):
+def butter_highpass(cutoff, fs, order=5,filtype='high'):
     nyq = 0.5 * fs
-    normal_cutoff = cutoff / nyq
-    b, a = scipy.signal.butter(order, normal_cutoff, btype = "high", analog = False)
+    if filtype == 'band':
+        if isinstance(cutoff, (list,tuple)):
+            normal_cutoff = [e/nyq for e in cutoff]
+        else:
+            print('List of filter needed for bandpass. Not filtering')
+            return None
+    else:
+        normal_cutoff = cutoff / nyq
+    # print(f'cutoffs:{normal_cutoff}')
+    b, a = scipy.signal.butter(order, normal_cutoff, btype=filtype, analog =False)
     return b, a
 
 
-def butter_highpass_filter(data, cutoff, fs, order=5):
-    b, a = butter_highpass(cutoff, fs, order=order)
+def butter_highpass_filter(data, cutoff, fs, order=3, filtype='high'):
+    b, a = butter_highpass(cutoff, fs, order=order,filtype=filtype)
     y = scipy.signal.filtfilt(b, a, data)
     return y
 
@@ -828,17 +914,23 @@ def find_good_sessions(df,stage,n_critereon=100,skip=0):
     return gd_sessions, gd_sessions_names, gd_sessions_dates
 
 
-def pair_dir2sess(topdir,animals, year_limit=2022,subject='mouse'):
+def pair_dir2sess(topdir,animals, year_limit=2022, subject='mouse', dirstyle=r'Y_m_d\it',
+                  spec_dates=None,spec_dates_op='='):
     paired_dirs = {}
     animals = [e.upper() for e in animals]
     for folder in os.listdir(topdir):
         if os.path.isdir(os.path.join(topdir,folder)):
             abs_folder_path = os.path.join(topdir,folder)
             folder_split = folder.split('_')
-            if folder_split[0].isnumeric():
-                if int(folder_split[0]) >= year_limit:
-                    for root,folder, file in os.walk(abs_folder_path):
-                        if root.split(os.sep)[-1].isnumeric():
+            name_vals = []
+            roots = []
+            root = topdir
+            date_in_corstr = None
+            if dirstyle == r'Y_m_d\it':
+                if folder_split[0].isnumeric():
+                    if int(folder_split[0]) >= year_limit:
+                        for root,folder, file in os.walk(abs_folder_path):
+                            if root.split(os.sep)[-1].isnumeric():
                                 directory = root.split(os.sep)
                                 date = directory[-2]
                                 try:date_in_dt = datetime.strptime(date, '%Y_%m_%d')
@@ -848,25 +940,51 @@ def pair_dir2sess(topdir,animals, year_limit=2022,subject='mouse'):
                                 try:content = pd.read_csv(os.path.join(root, 'user_info.csv'), index_col=0)
                                 except pd.errors.ParserError or FileNotFoundError:
                                     continue
-                                name_val = content['value']['name']
-                                if type(name_val) == str:
-                                    name_val = name_val.upper()
-                                    if name_val[:2].upper() == 'D0':
-                                        name_val = f'DO{name_val[2:]}'
-                                    if name_val.upper().lstrip() in animals:
-                                        # animal = content.value[0][-2:]#do46
-                                        animal = name_val.upper().lstrip()
-                                        if subject == 'human':
-                                            animal=animal.capitalize()
-                                        sess = f'{animal}_{date_in_corstr}'
-                                        if paired_dirs.get(sess,None) is None:
-                                            paired_dirs[sess] = root
-                                        else:
-                                            old_item = paired_dirs[sess]
-                                            if isinstance(old_item,list):
-                                                paired_dirs[sess] = old_item.append(root)
-                                            else:
-                                                paired_dirs[sess] = [old_item,root]
+                                name_vals.append(content['value']['name'])
+                                roots.append(root)
+
+            elif dirstyle == 'N_D_it':
+                if '_' in folder:
+                    filestr = folder_split
+                    date_in_dt = datetime.strptime(filestr[1], '%y%m%d')
+                    date_in_corstr = datetime.strftime(date_in_dt, '%y%m%d')
+                    if spec_dates:
+                        spec_dates_int = [int(e) for e in list(spec_dates)]
+                        if spec_dates_op == '=':
+                            if date_in_corstr not in spec_dates:
+                                continue
+                        elif spec_dates_op == '<=':
+                            if int(date_in_corstr) > spec_dates_int[0]:
+                                continue
+                        elif spec_dates_op == '>=':
+                            if int(date_in_corstr) < spec_dates_int[0]:
+                                continue
+                        elif spec_dates_op == '<=<':
+                            if int(date_in_corstr) > spec_dates_int[1] or int(date_in_corstr) < spec_dates_int[0]:
+                                continue
+                    name_vals.append(filestr[0])
+                    roots.append(os.path.join(topdir,folder))
+            else:
+                print('invalid dir style given')
+                continue
+            for name_val,root in zip(name_vals,roots):
+                if type(name_val) == str:
+                    name_val = name_val.upper()
+                    if name_val[:2].upper() == 'D0':
+                        name_val = f'DO{name_val[2:]}'
+                    if name_val.upper().lstrip() in animals:
+                        animal = name_val.upper().lstrip()
+                        if subject == 'human':
+                            animal=animal.capitalize()
+                        sess = f'{animal}_{date_in_corstr}'
+                        if paired_dirs.get(sess,None) is None:
+                            paired_dirs[sess] = root
+                        else:
+                            old_item = paired_dirs[sess]
+                            if isinstance(old_item,list):
+                                paired_dirs[sess] = old_item.append(root)
+                            else:
+                                paired_dirs[sess] = [old_item,root]
 
     return paired_dirs
 
@@ -877,12 +995,15 @@ def fit_elipse(point_array):
     return (xc,yc), r1, r2
 
 
-def get_dlc_diams(df,n_frames):
+def get_dlc_diams(df: pd.DataFrame,n_frames: int,scorer: str,):
+    if n_frames == 0:
+        n_frames = df.shape[0]
     bodypoints = np.array(df)
     radii1_ = np.full(n_frames,np.nan)
     radii2_ = np.full(n_frames,np.nan)
     centersx_ = np.full(n_frames,np.nan)
     centersy_ = np.full(n_frames,np.nan)
+    diams_EW = np.full(n_frames,np.nan)
 
     for i,row in enumerate(bodypoints[:n_frames,:]):
         reshaped = row[0:24].reshape([8,3])
@@ -899,4 +1020,86 @@ def get_dlc_diams(df,n_frames):
             radii2_[i] = frame_elipse[2]
             centersx_[i] = frame_elipse[0][0]
             centersy_[i] = frame_elipse[0][1]
-    return radii1_, radii2_, centersx_, centersy_
+
+    eyeEW_arr = np.array((df[scorer, 'eyeW'] - df[scorer, 'eyeE'])[['x', 'y']])
+    if len(eyeEW_arr) < n_frames:
+        eyeEW_arr = np.pad(eyeEW_arr,[(0,n_frames-len(eyeEW_arr)),(0,0)],constant_values=np.nan)
+    diams_EW[:n_frames] = np.linalg.norm(eyeEW_arr,axis=1)[:n_frames]
+
+    return radii1_, radii2_, centersx_, centersy_, diams_EW
+
+
+def get_event_matrix(data_obj: object, data_dict: dict, harpbin_path: str, clock_offest=0) -> dict:
+    all_bins = np.array(glob.glob(f'{os.path.join(harpbin_path,"*32.csv" )}'))
+    harpmatrices = {}
+    plt.ioff()
+    for sess in data_dict:
+        sess_bins = all_bins[[sess.split('_')[0] in e and sess.split('_')[1] in e for e in all_bins]]
+        bin_dict = {}
+        # sort out clocks
+        sess_idx = sess.split('_')
+        if sess_idx[1] not in data_obj.trialData.index.get_level_values('Date'):
+            print('Date not in trialdata, skipping')
+            continue
+        sess_td = data_obj.trialData.loc[(sess_idx[0],sess_idx[1])].copy()
+        sess_td.index=sess_td['Trial_Start_Time']
+        if 'Bonsai_time_dt' in sess_td.columns:
+            bonsai0 = sess_td['Bonsai_time_dt'][0]
+        else:
+            sess_td['Bonsai_time_dt'] = sess_td['Time_dt']
+            bonsai0 = sess_td['Bonsai_time_dt'][0]
+        bonsai0 = bonsai0-timedelta(hours=float(sess_td['Offset'][0]))
+        harp0 = sess_td['Harp_time'][0]
+
+        plot = False
+        if plot:
+            fig, ax = plt.subplots()
+            bon_diff = sess_td['Bonsai_time_dt'].diff().apply(lambda e: e.total_seconds())
+            harp_diff = sess_td['Harp_time'].diff()
+            ax.plot((bon_diff-harp_diff).to_numpy())
+            ax.set_ylabel('Difference in elapsed time: Bonsai-Harp (s)')
+            ax.set_xlabel('Trial Counter')
+            ax.set_title(f'Diff in diff bon - harp for {sess}')
+            fig.canvas.manager.set_window_title(f'sync_diffs{sess}')
+            fig.savefig(rf'W:\mouse_pupillometry\figures\syncplots_221109\sync_diffs{sess}.svg',format='svg')
+            plt.close(fig)
+        plt.ion()
+
+        # bonsai0 = datetime.strptime(r'221031 12:25:24.68594','%y%m%d %H:%M:%S.%f')
+        # harp0 = 594023.721024
+        for i in range(8):
+            bin_dict[i] = []
+
+        for bin_path in sess_bins:
+            bin_df = pd.read_csv(bin_path)
+            for event in bin_df['Payload'].unique():
+                bin_dict[event].extend(bin_df[bin_df['Payload'] == event]['Timestamp'].to_list().copy())
+        for event in bin_dict:
+            event_times =[]
+            for e in bin_dict[event]:
+                harp_dis_min = (sess_td['Harp_time']-e).abs().idxmin()
+                event_times.append(sess_td['Bonsai_time_dt'][harp_dis_min] - timedelta(hours=float(sess_td['Offset'][harp_dis_min]))
+                                   + timedelta(seconds=e - sess_td['Harp_time'][harp_dis_min]))
+            # bin_dict[event] = np.array([bonsai0 + timedelta(seconds=e - harp0) for e in bin_dict[event]])
+            bin_dict[event] = np.array(event_times)
+        harpmatrices[sess] = bin_dict
+        # print(bin_dict[0][0], data_obj.data[sess].harpmatrices[0][0])
+
+    return harpmatrices
+
+
+def align_nonpuil(eventzz: pd.Series, timeseries: np.ndarray, window: list,
+                  offsetseries: pd.Series, eventshift=0.0) -> dict:
+    window = np.array(window)
+    event_dict = {}
+    eventzz = eventzz - offsetseries.apply(lambda e: timedelta(hours=float(e)))
+    for i, eventtime in enumerate(eventzz):
+        eventtime = eventtime + timedelta(seconds=eventshift)
+        min_time = eventtime + timedelta(seconds=window[0])
+        max_time = eventtime + timedelta(seconds=window[1])
+        try:idx_bool = (timeseries<= max_time) * (timeseries>=min_time)
+        except TypeError: continue
+        event_dict[eventtime] = timeseries[idx_bool]-np.full_like(timeseries[idx_bool],eventtime)
+        event_dict[eventtime] = np.array([e.total_seconds() for e in event_dict[eventtime]])
+
+    return event_dict
