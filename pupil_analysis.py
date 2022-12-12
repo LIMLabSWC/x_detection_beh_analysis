@@ -74,9 +74,9 @@ def get_subset(dataclass, dataclass_dict, cond_name, filters, events=None, beh='
             #     for i, idx in enumerate(idx_filts):
 
             if level == 'name':
-                aligned_subset = [aligned_df.loc[:,idx_filts,:] for aligned_df in aligned_tuple[2]]
+                aligned_subset = [aligned_df.loc[:,[idx_filts],:] for aligned_df in aligned_tuple[2]]
             elif level == 'date':
-                aligned_subset = [aligned_df.loc[:, : idx_filts] for aligned_df in aligned_tuple[2]]
+                aligned_subset = [aligned_df.loc[:, :,[idx_filts]] for aligned_df in aligned_tuple[2]]
             else:
                 continue
 
@@ -88,13 +88,16 @@ def get_subset(dataclass, dataclass_dict, cond_name, filters, events=None, beh='
                         list_ntrials_cond = []
                         for animal in aligned_df.index.get_level_values('name').unique():
                             for date in aligned_df.index.get_level_values('date').unique():
-                                sess_df = aligned_df.loc[:,animal,date]
+                                sess_df = aligned_df.loc[:,animal,date].copy()
                                 if ntrials_cond > 0:
-                                    list_ntrials_cond.append(sess_df.head(ntrials_cond))
+                                    list_ntrials_cond.append(sess_df.head(ntrials_cond).copy())
                                 else:
-                                    list_ntrials_cond.append(sess_df.tail(abs(ntrials_cond)))
+                                    list_ntrials_cond.append(sess_df.tail(abs(ntrials_cond)).copy())
 
-                        aligned_subset[idx] = copy(pd.concat(list_ntrials_cond,axis=0))
+                        if len(list_ntrials_cond)> 0:
+                            aligned_subset[idx] = pd.concat(list_ntrials_cond,axis=0).copy()
+                        else:
+                            break
 
             if drop:
                 aligned_subset = [aligned_df.drop(drop[1], level=drop[0]) for aligned_df in aligned_subset]
