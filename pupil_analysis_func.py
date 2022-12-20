@@ -289,8 +289,10 @@ class Main:
                 self.data = pickle.load(pklfile)
 
             for sess in self.data.copy():
-                try: self.data[sess].trialData
-                except AttributeError: self.data.pop(sess)
+                try:
+                    self.data[sess].trialData
+                except AttributeError:
+                    self.data.pop(sess)
                 if self.data[sess].trialData is None or self.data[sess].pupildf is None:
                     self.data.pop(sess)
             if extra_steps:
