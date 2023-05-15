@@ -27,5 +27,5 @@ args = parser.parse_args()
 
 for d in dates2process:
     process = subprocess.Popen(script_base.replace('<cf>',args.cf).replace('<d>',d).split(' '))
-    logger.info(script_base.replace('<cf>',args.cf).replace('<d>',d).split(' '))
+    # logger.info(script_base.replace('<cf>',args.cf).replace('<d>',d).split(' '))
 
