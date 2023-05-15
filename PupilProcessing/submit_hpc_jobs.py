@@ -14,7 +14,7 @@ logger.configure(
 )
 parser = argparse.ArgumentParser()
 parser.add_argument('cf')
-script_base = r'sbatch process_sessions.sh <cf> <d>'
+script_base = r'sbatch PupilProcessing/process_sessions.sh <cf> <d>'
 
 dates2process = [
                     # '221111','221114','221115','221116','221117','221118',
