@@ -16,5 +16,5 @@ module load cuda/11.6
 source activate DEEPLABCUT
 export DLClight=True
 
-echo "running script"
+echo "running processing script"
 python /ceph/akrami/Dammy/gd_analysis/mousepipeline.py "$1" "${2:''}"
