@@ -13,6 +13,10 @@ import matplotlib.colors
 import statsmodels.api as sm
 import ruptures as rpt
 from copy import deepcopy as copy
+from itertools import product
+from functools import partial
+from scipy.signal import find_peaks, find_peaks_cwt
+
 import glob
 import random
 
@@ -20,7 +24,8 @@ import random
 
 
 def batch_analysis(dataclass,dataclass_dict,stages,column,shifts,events,labels,pmetric='dlc_radii_a_zscored',use4pupil=False,
-                   filter_df=True,pdr=False,plot=False,baseline=True):
+                   filter_df=True,pdr=False,plot=False,baseline=True,extra_filts=None,sep_cond_cntrl_flag=False,
+                   cond_name=None):
     """
     Perform batch analysis of pupil data.
 
@@ -43,26 +48,44 @@ def batch_analysis(dataclass,dataclass_dict,stages,column,shifts,events,labels,p
     - A list of keys for the analyzed conditions.
     """
     cond_keys = []
+    if not extra_filts:
+        extra_filts = []
     for s in stages:
         for shift in shifts:
-            cond_name = f'stage{s}_{events}_{column}_{shift[0]}'
+            if cond_name is None:
+                cond_name = f'stage{s}_{events}_{column}_{shift[0]}'
             cond_keys.append(cond_name)
             event_filters = []
+
             if filter_df:
                 for e in events:
-                    if e[0] == 'd':
-                        event_filters.append(['e!0', 's3', e, f'stage{s}'])
-                    elif e == 'none':
-                        event_filters.append(['e=0', 's3', f'stage{s}'])
+                    if any([ee[0] in ['d','p'] for ee in e]):
+                        event_filters.append(['e!0', f'stage{s}']+e+extra_filts)
+                    elif 'none' in e:
+                        none_filt = (['e=0', f'stage{s}']+extra_filts)
+                        if 'tones4' in none_filt:
+                            none_filt.remove('tones4')
+                        if 'e!0' in none_filt:
+                            none_filt.remove('e!0')
+                        event_filters.append(none_filt)
                     else:
                         event_filters.append(e)
             else:
                 event_filters.append(event_filters)
-            dataclass_dict[cond_name] = dataclass.get_aligned(event_filters,
-                                                                 event_shift=[shift[0]] * len(event_filters), align_col=column,
+            for e in event_filters:
+                if 'none' in e or 'e=0' in e:
+                    if 'tones4' in e:
+                        e.remove('tones4')
+                    if 'e!0' in e:
+                        e.remove('e!0')
+                if 's1' in e:
+                    print(e)
+            dataclass_dict[cond_name] = dataclass.get_aligned(event_filters,event_shift=[shift[0]] * len(event_filters), align_col=column,
                                                                  event=shift[1], xlabel=f'Time since {shift[1]}', pdr=pdr,
                                                                  plotlabels=labels[:len(event_filters)],
-                                                                 use4pupil=use4pupil,pmetric=pmetric,plot=plot, baseline=baseline)
+                                                                 use4pupil=use4pupil,pmetric=pmetric,plot=plot, baseline=baseline,
+                                                                 sep_cond_cntrl_flag=sep_cond_cntrl_flag)
+
             if plot:
                 dataclass_dict[cond_name][0].canvas.manager.set_window_title(cond_name)
                 fig_savename = f'{cond_name}_a.svg'
@@ -78,86 +101,147 @@ def batch_analysis(dataclass,dataclass_dict,stages,column,shifts,events,labels,p
     return cond_keys
 
 
-def get_subset(dataclass, dataclass_dict, cond_name, filters, events=None, beh='default',extra_filts=None,drop=None,ntrials=None):
-
+def get_subset(dataclass, dataclass_dict, cond_name, filters=(None,), events=None, beh='default',level2filt='date',drop=None,
+               ntrials=None,ntrial_start_idx=None, plttype='ts', ylabel='Pupilsize',xlabel=None,plttitle=None,pltaxis=None,
+               pltargs=(None,None),plotcols=None,pdr=False,pdelta_wind=(0,1),
+               exclude_idx=(None,),ctrl_idx=0):
     """
-       Get a subset of the pupil data.
 
-       Args:
-       - dataclass: An object containing the pupil data.
-       - dataclass_dict: A dictionary containing the results of the analysis.
-       - cond_name: The key for the condition to subset.
-       - filters: A dictionary of filters to apply to the data.
-       - events: (Optional) A list of events to filter the data by.
-       - beh: (Optional) The behavior to filter the data by.
-       - extra_filts: (Optional) Additional filters to apply to the data.
-       - drop: (Optional) A list of columns to drop from the data.
-       - ntrials: (Optional) The number of trials to select.
+    :param dataclass:
+    :param dataclass_dict:
+    :param cond_name:
+    :param filters:
+    :param events:
+    :param beh:
+    :param level2filt:
+    :param drop:
+    :param ntrials:
+    :param ntrial_start_idx:
+    :param plttype:
+    :param ylabel:
+    :param xlabel:
+    :param plttitle:
+    :param pltaxis:
+    :param pltargs:
+    :param plotcols:
+    :param pdr:
+    :param pdelta_wind:
+    :param exclude_idx:
+    :param ctrl_idx:
+    :return:
+    """
 
-       Returns:
-       - A tuple containing the subsetted data, metadata, and aligned data.
-       """
     aligned_tuple = dataclass_dict[cond_name]
-    for level in filters:
-        for i, filt in enumerate(filters[level]):
-            if extra_filts:
-                levels = [level,*list(extra_filts.keys())]
-                idx_filts = [filt,*list(extra_filts.values())]
-            else:
-                levels = level
-                idx_filts = filt
-            # if isinstance(idx_filts,list):
-            #     list_dfs= []
-            #     for i, idx in enumerate(idx_filts):
 
-            if level == 'name':
-                aligned_subset = [aligned_df.loc[:,idx_filts,:] for aligned_df in aligned_tuple[2]]
-            elif level == 'date':
-                aligned_subset = [aligned_df.loc[:, : idx_filts] for aligned_df in aligned_tuple[2]]
-            else:
-                continue
+    idx_filters = {'time':[],'name':[],'date':[]}
+    for idx_filt in filters:
+        if idx_filt in idx_filters:
+            if isinstance(filters[idx_filt],str):
+                filters[idx_filt] = [filters[idx_filt]]
+            idx_filters[idx_filt] = filters[idx_filt]
+    if len(idx_filters['name']) == 0:
+        idx_filters['name'] = dataclass.labels
+    if len(idx_filters['date']) == 0:
+        idx_filters['date'] = dataclass.dates
 
-            if ntrials:
-                if isinstance(ntrials,int):
-                    ntrials = [ntrials]*len(aligned_subset)
-                for idx, (aligned_df, ntrials_cond) in enumerate(zip(aligned_subset,ntrials)):
-                    if ntrials_cond:
-                        list_ntrials_cond = []
-                        for animal in aligned_df.index.get_level_values('name').unique():
-                            for date in aligned_df.index.get_level_values('date').unique():
-                                sess_df = aligned_df.loc[:,animal,date]
-                                if ntrials_cond > 0:
-                                    list_ntrials_cond.append(sess_df.head(ntrials_cond))
+    # get all idx combs
+    _idx = [idx_filters['name'], idx_filters['date']]
+    idx_combs = [p for p in product(*_idx)]
+
+    aligned_tuple_no_empty = list(filter(lambda e: e.shape[0]>1, aligned_tuple[2]))
+
+    for filt in idx_filters[level2filt]:
+        aligned_subset = []
+        for aligned_df in aligned_tuple_no_empty:
+            aligned_subset.append(aligned_df.loc[aligned_df.index[aligned_df.index.droplevel('time').isin(idx_combs)]])
+        aligned_subset = [df for df_i, df in enumerate(aligned_subset) if df_i not in exclude_idx]
+
+        if ntrials:
+            if isinstance(ntrials,int):
+                ntrials = [ntrials]*len(aligned_subset)
+            elif isinstance(ntrials,float):
+                assert -1 <= ntrials <= 1
+                ntrials = [ntrials]*len(aligned_subset)
+
+            # elif isinstance(ntrials,(list,tuple,np.ndarray)):
+
+            for idx, (aligned_df, ntrials_cond) in enumerate(zip(aligned_subset,ntrials)):
+                if ntrials_cond:
+                    if not ntrial_start_idx:
+                        ntrial_start_idx = 0
+                    list_ntrials_cond = []
+                    for animal in aligned_df.index.get_level_values('name').unique():
+                        for date in aligned_df.index.get_level_values('date').unique():
+                            sess_df = aligned_df.loc[:,[animal],[date]].copy()
+                            if ntrials_cond > 0:
+                                if ntrials_cond >= 1:
+                                    list_ntrials_cond.append(sess_df.head(ntrials_cond+ntrial_start_idx).copy()
+                                                             [ntrial_start_idx:])
                                 else:
-                                    list_ntrials_cond.append(sess_df.tail(abs(ntrials_cond)))
+                                    subset_sess_df = sess_df.iloc[int(ntrial_start_idx*sess_df.shape[0]):
+                                                                  int(ntrials_cond*sess_df.shape[0]+int(ntrial_start_idx*sess_df.shape[0])), :]
+                                    list_ntrials_cond.append(subset_sess_df.copy())
+                            else:
+                                if ntrials_cond <= -1:
+                                    list_ntrials_cond.append(sess_df.tail(abs(ntrials_cond)+ntrial_start_idx).copy()
+                                                             [:ntrial_start_idx])
+                                else:
+                                    list_ntrials_cond.append(sess_df.tail(abs(int(sess_df.shape[0]*ntrials_cond))).copy())
 
-                        aligned_subset[idx] = copy(pd.concat(list_ntrials_cond,axis=0))
+                    if len(list_ntrials_cond)> 0:
+                        aligned_subset[idx] = pd.concat(list_ntrials_cond,axis=0).copy()
+                    else:
+                        break
 
-            if drop:
-                aligned_subset = [aligned_df.drop(drop[1], level=drop[0]) for aligned_df in aligned_subset]
-            if events is None:
-                events = [f'Event {i}' for i in range(len(aligned_subset))]
-            aligned_subset_fig,aligned_subset_ax = utils.plot_eventaligned(aligned_subset,events,dataclass.duration,beh)
+        if drop:
+            aligned_subset = [aligned_df.drop(drop[1], level=drop[0]) for aligned_df in aligned_subset]
+        if events is None:
+            events = [f'Event {i}' for i in range(len(aligned_subset))]
+        if pdr:
+            _pdr_subset = dataclass.get_pdr(copy(aligned_subset),event=beh,smooth=True)[2]
+            for df in _pdr_subset:
+                assert np.all(df.to_numpy()>=0.0)
+            aligned_subset = _pdr_subset
+        aligned_subset_fig,aligned_subset_ax = utils.plot_eventaligned(aligned_subset,events,dataclass.duration,
+                                                                       beh,plottype_flag=plttype,binflag=True,
+                                                                       plotax=pltaxis,pltargs=pltargs,
+                                                                       pdelta_wind=pdelta_wind,ctrl_idx=ctrl_idx,
+                                                                       plotcols=plotcols)
 
+        if plttype == 'ts':
             aligned_subset_ax.axvline(0,ls='--',c='k')
-            aligned_subset_ax.set_ylabel('Pupil Size')
             aligned_subset_fig.canvas.manager.set_window_title(f'{cond_name}_{filt} N trials={ntrials}')
-            fig_savename = f'{cond_name}_{filt}_a.svg'.replace(':','')
-            fig_path = os.path.join(dataclass.figdir, fig_savename)
-            while os.path.exists(fig_path):
-                file_suffix = os.path.splitext(fig_path)[0][-1]
-                fig_path = f'{os.path.splitext(fig_path)[0][:-1]}' \
-                           f'{chr(ord(file_suffix) + 1)}{os.path.splitext(fig_path)[1]}'
+        aligned_subset_ax.set_ylabel(ylabel)
+        if xlabel:
+            aligned_subset_ax.set_xlabel(xlabel)
+        if plttitle:
+            # plttitle.replace('%d')
+            aligned_subset_ax.set_title(plttitle)
+        fig_savename = f'{cond_name}_{filt}_{plttype}_a.svg'.replace(':','')
+        fig_path = os.path.join(dataclass.figdir, fig_savename)
+        while os.path.exists(fig_path):
+            file_suffix = os.path.splitext(fig_path)[0][-1]
+            fig_path = f'{os.path.splitext(fig_path)[0][:-1]}' \
+                       f'{chr(ord(file_suffix) + 1)}{os.path.splitext(fig_path)[1]}'
+        if pltaxis is None:
             if not os.path.exists(fig_path):
                 aligned_subset_fig.savefig(fig_path)
             else:
                 print('path exists, not overwriting')
 
+        return aligned_subset_fig,aligned_subset_ax, aligned_subset
+
 
 def plot_traces(iter1, iter2, data, dur, fs, control_idx=0, cond_subset=None, cmap_name='RdBu_r', binsize=0,
-                cmpap_lbls=('start', 'end'),
+                cmpap_lbls=('start', 'end'),pltax=None, cmap_flag=True,linealpha=0.5,
                 plotformatdict=None):
     lines = ["--", "-.", ":", "-"]
+
+    if iter1 == 'all':
+        iter1 = [data[2][0].index.get_level_values('name').unique()]
+    if iter2 == 'all':
+        iter2 = [data[2][0].index.get_level_values('name').unique()]
+
     if isinstance(data, (list,tuple)):
         if len(data) >= 2:
             if isinstance(data[2][0], pd.DataFrame):
@@ -173,42 +257,57 @@ def plot_traces(iter1, iter2, data, dur, fs, control_idx=0, cond_subset=None, cm
         return None
 
     if cond_subset is None:
-        cond_subset = list(range(len(working_dfs))).pop(control_idx)
-    fig, axes = plt.subplots(len(iter1), len(iter2),sharex='all',sharey='all')
+        cond_subset = list(range(len(working_dfs)))
+        cond_subset.pop(control_idx)
+    if pltax:
+        fig,axes = pltax
+    else:
+        fig, axes = plt.subplots(len(iter1), len(iter2),sharex='all',sharey='all',squeeze=False)
     x_ts = np.arange(dur[0],dur[1]-fs,fs)
+    # get sessions with alternating pattern trials
+
     for i1, e1 in enumerate(iter1):
         for i2, e2 in enumerate(iter2):
+            if (e1, e2) not in working_dfs[0].index.droplevel('time').to_series().unique():
+                continue
             sess_conds_dfs = [working_dfs[cond_idx].loc[:, e1, e2] for cond_idx in list(cond_subset)]
-            # sess_conds_dfs.pop(control_idx)
 
             for si, sess_df in enumerate(sess_conds_dfs):
                 if binsize:
                     sess_df = sess_df.rolling(binsize).mean()[binsize - 1::binsize]
                 cmap = plt.get_cmap(cmap_name, sess_df.shape[0])
                 for i, (idx, row) in enumerate(sess_df.iterrows()):
-                    axes[i1][i2].plot(x_ts,row, c=cmap(i), ls=lines[si % len(lines)])
+                    if cmap:
+                        linecol = cmap(i)
+                    else:
+                        linecol = 'lightgrey'
+                    axes[i1][i2].plot(x_ts,row, c=linecol, ls=lines[si % len(lines)],alpha=linealpha)
             if control_idx:
                 control_df = working_dfs[control_idx].loc[:, e1, e2]
                 axes[i1][i2].plot(x_ts,control_df.mean(axis=0), c='k')
             axes[i1][i2].axvline(0, c='k', ls='--')
+
     fig.subplots_adjust(left=0.05, bottom=0.08, right=0.925, top=0.95, wspace=0.025, hspace=0.025)
     # set cbar position
-    x0, y0, width, height = [1.05, -.75, 0.075, 3.5]
-    Bbox = matplotlib.transforms.Bbox.from_bounds(x0, y0, width, height)
-    ax4cmap = axes[int((axes.shape[0]/2))][-1]
-    trans = ax4cmap.transAxes + fig.transFigure.inverted()
-    l, b, w, h = matplotlib.transforms.TransformedBbox(Bbox, trans).bounds
-    cbaxes = fig.add_axes([l, b, w, h])
-    cmap = plt.get_cmap(cmap_name, 1000)
-    norm = matplotlib.colors.Normalize()
-    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-    sm.set_array([])
-    fig_cbar = plt.colorbar(sm, cax=cbaxes, ticks=[0, 1], orientation='vertical')
-    # fig_cbar = fig.colorbar(sm, ticks=(0, 1), ax=axes[:, -1])
-    fig_cbar.ax.tick_params(labelsize=9)
+    if not cmap_flag:
+        fig_cbar = None
+    else:
+        x0, y0, width, height = [1.05, -.75, 0.075, 3.5]
+        Bbox = matplotlib.transforms.Bbox.from_bounds(x0, y0, width, height)
+        ax4cmap = axes[int((axes.shape[0]/2))][-1]
+        trans = ax4cmap.transAxes + fig.transFigure.inverted()
+        l, b, w, h = matplotlib.transforms.TransformedBbox(Bbox, trans).bounds
+        cbaxes = fig.add_axes([l, b, w, h])
+        cmap = plt.get_cmap(cmap_name, 1000)
+        norm = matplotlib.colors.Normalize()
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        fig_cbar = plt.colorbar(sm, cax=cbaxes, ticks=[0, 1], orientation='vertical')
+        # fig_cbar = fig.colorbar(sm, ticks=(0, 1), ax=axes[:, -1])
+        fig_cbar.lick_ts_ax.tick_params(labelsize=9)
 
-    # label plot
-    fig_cbar.ax.set_yticklabels(cmpap_lbls)
+        # label plot
+        fig_cbar.lick_ts_ax.set_yticklabels(cmpap_lbls)
     if plotformatdict:
         for ai, ax in enumerate(axes[:,0]):
             ax.set_ylabel(plotformatdict.get('ylabel'))
@@ -280,10 +379,34 @@ def glm_from_baseline(traces: pd.DataFrame,dur,bseln_dur,ax):
 
     return glm
 
+def get_fig_mosaic(dates2plot):
+    fig_form = ''
+    n_cols = len(dates2plot)
+    izz = '0123456789abcdefghijklmnopqrstuvwxyz'
+
+
+    if n_cols == 4:
+        n_cols = 2
+    if n_cols <= 3:
+        n_cols = n_cols
+    else:
+        n_cols = 3
+
+    if len(dates2plot) > 1:
+        for di, d in enumerate(dates2plot):
+            fig_form += str(izz[di]) * 2
+        chunked_fig_form = [fig_form[i:i + n_cols * 2].center(n_cols * 2, '.') for i in
+                            range(0, len(fig_form), n_cols * 2)]
+        fig_form = '\n'.join(chunked_fig_form)
+    else:
+        chunked_fig_form = ['00']
+        fig_form = '00'
+
+    return fig_form, chunked_fig_form, n_cols, izz
 
 class Main:
 
-    def __init__(self,pklfilename, duration_window=(-1,2),extra_steps=True):
+    def __init__(self,pklfilename, duration_window=(-1,2),extra_steps=True,figdir=None,fig_ow=False):
             plt.style.use("seaborn-white")
             with open(pklfilename,'rb') as pklfile:
                 self.data = pickle.load(pklfile)
@@ -293,6 +416,7 @@ class Main:
                     self.data[sess].trialData
                 except AttributeError:
                     self.data.pop(sess)
+            for sess in self.data.copy():
                 if self.data[sess].trialData is None or self.data[sess].pupildf is None:
                     self.data.pop(sess)
             if extra_steps:
@@ -305,12 +429,22 @@ class Main:
             # self._pupildf()
 
             today =  datetime.strftime(datetime.now(),'%y%m%d')
-            self.figdir = os.path.join(os.getcwd(),'figures',today)
+            if figdir is None:
+                figdir = os.path.join(os.getcwd(),'figures',today)
+            self.figdir = figdir
             if not os.path.isdir(self.figdir):
                 os.mkdir(self.figdir)
+            else:
+                if not fig_ow:
+                    figdir = f'{figdir}_copy_{today}a'
+                    while os.path.isdir(figdir):
+                        file_suffix = os.path.splitext(figdir)[0][-1]
+                        figdir = f'{os.path.splitext(figdir)[0][:-1]}' \
+                                   f'{chr(ord(file_suffix) + 1)}{os.path.splitext(figdir)[1]}'
+                    self.figdir = figdir
+                    os.mkdir(self.figdir)
             # self.figdir = f''
-            self.samplerate = self.data[self.sessions[0]].pupildf.index.to_series().diff().mean().total_seconds()
-
+            self.samplerate = self.data[self.sessions[0]].pupildf.index.to_series().diff().median().total_seconds()
 
     def add_date_pupildf(self):
         for sess in self.data:
@@ -320,6 +454,19 @@ class Main:
             pupil_df_ix = pupil_df.index
             merged_ix = [e.replace(year=date_dt.year,month=date_dt.month,day=date_dt.day) for e in pupil_df_ix]
             pupil_df.index = merged_ix
+
+    def add_offset_ser(self):
+        for sess in self.data:
+            sess_date = sess.split('_')[1]
+            sess_td = self.data[sess].trialData
+            daylightsavings = np.array(
+                [[200329, 201025], [210328, 211031], [220327, 221030], [220326, 221029]])  # daylight saving period
+            _dst_arr = daylightsavings - int(sess_date)
+            if all(_dst_arr.prod(axis=1) > 0):
+                offset_series = np.full_like(sess_td.index, 0.0)
+            else:
+                offset_series = np.full_like(sess_td.index, 1.0)
+            sess_td['Offset'] = offset_series
 
     def add_pretone_dt(self):
         for sess in self.data:
@@ -350,9 +497,31 @@ class Main:
             td_df = self.data[sess].trialData
             td_df[f'{colname}_roll'] = td_df.rolling(windowsize).mean()
 
-    def get_aligned(self, filters, event_shift=[0.5], align_col='ToneTime_dt', event='ToneTime', plot=True,
+    def add_lick_in_window_bool(self,colname):
+        for sess in self.data:
+            td_df = self.data[sess].trialData
+            td_df.set_index('Trial_Start_dt', append=True, inplace=True, drop=False)
+            sess_date = sess.split('_')[1]
+            y,m,d = int(f'20{sess_date[:2]}'),int(sess_date[2:4]),int(sess_date[4:])
+            td_df['Lick_Times_dt'] = td_df['Lick_Times'].apply(lambda e: utils.format_timestr(e.split(';'),(y,m,d)))
+            td_df[f'Lick_in_window'] = td_df.apply(lambda e: any(list(map(partial(utils.in_time_window,t=e[colname],
+                                                                                  window=(-1,2)),
+                                                                      e['Lick_Times_dt']))),axis=1)
+
+    def add_viol_diff(self):
+        for sess in self.data:
+            td_df = self.data[sess].trialData
+            normal_pattern = utils.filter_df(td_df,['e!0','d0','s2'])['PatternID'].unique()[-1]
+            normal_pattern = np.array(normal_pattern.split(';'),dtype=int)
+            td_df['C_tone_diff'] = td_df['PatternID'].apply(lambda e: (np.array(e.split(';'), dtype=int)
+                                                                       - normal_pattern)[2])
+            td_df['D_tone_diff'] = td_df['PatternID'].apply(lambda e: (np.array(e.split(';'), dtype=int)
+                                                                       - normal_pattern)[3])
+
+    def get_aligned(self, filters, event_shift=(0.5,), align_col='ToneTime_dt', event='ToneTime', plot=True,
                     xlabel='', plotsess=False, plotlabels=('Normal', 'Deviant'), pdr=False, ax=None, plotcols=None,
-                    use4pupil=False, animals=None, daterange=None, pmetric='dlc_area_zscored',baseline=True):
+                    use4pupil=False, animals=None, daterange=None, pmetric='dlc_area_zscored',baseline=True,
+                    sep_cond_cntrl_flag=False):
 
         if len(event_shift) != len(filters):
             if len(event_shift * len(filters)) == len(filters):
@@ -369,14 +538,16 @@ class Main:
         if xlabel == '':
             xlabel = f'Time from {event.split("_")[:-1]}'
         ylabel = 'zcscored pupil size'
-        tonealigned_viols, tonealigned_viols_df, tonealigned_trials = align_wrapper(self.data,filters,align_col,
+        tonealigned_viols, tonealigned_viols_df, tonealigned_trials,trials_excluded = align_wrapper(self.data,filters,align_col,
                                                                                     self.duration,alignshifts=viol_shifts,
                                                                                     plotlabels=plotlabels, plottitle='Violation',
                                                                                     xlabel=xlabel, animal_labels=self.labels,
                                                                                     plotsess=plotsess, baseline=baseline,
                                                                                     pupilmetricname=pmetric,
+                                                                                    sep_cond_cntrl_flag=sep_cond_cntrl_flag
                                                                                     )
-        tonealigned_viols_df.columns = plotlabels
+        try:tonealigned_viols_df.columns = plotlabels
+        except ValueError: print('value error')
         if pdr:
             tonealigned_viols = self.get_pdr(tonealigned_viols,None, None, plot=False)[2]
             ylabel = 'PDR a.u'
@@ -404,7 +575,7 @@ class Main:
         else:
             tonealigned_viols_fig, tonealigned_viols_ax = None,None
 
-        return tonealigned_viols_fig,tonealigned_viols_ax,tonealigned_viols,tonealigned_trials
+        return tonealigned_viols_fig,tonealigned_viols_ax,tonealigned_viols,tonealigned_trials,trials_excluded
 
     def get_firsts(self,aligned_data,n_firsts, plotlabels, event, shuffle=False, pdr=False, plot=True):
 
@@ -485,7 +656,7 @@ class Main:
 
             return fig, ax, aligned_ntrials
 
-    def get_pdr(self, aligned_data,plotlabels,event,plot=True,smooth=True,han_size=0.15):
+    def get_pdr(self, aligned_data,event,plot=False,plotlabels=None,smooth=False,han_size=0.15):
 
         if isinstance(aligned_data[-1],list):
             aligned_arr = aligned_data[2]
@@ -497,14 +668,24 @@ class Main:
 
         aligned_pdrs = []
 
-        for i,ptype in enumerate(aligned_arr):
-            aligned_deriv = np.diff(ptype,axis=1)/self.samplerate
-            pdr_arr = (aligned_deriv>0.0).astype(int)
+        for i,ptype_df in enumerate(aligned_arr):
+
+            # find start of dilation events
+            pdr_arr = copy((np.zeros_like(ptype_df)))
+            for ri, (idx,trial) in enumerate(ptype_df.iterrows()):
+                peak_idx = find_peaks(trial*-1,width=int(0.3/self.samplerate))[0]
+                if peak_idx.size > 0:
+                    pdr_arr[ri,peak_idx] = 1
+            assert np.all(pdr_arr>=0.0)
+            # aligned_deriv = np.diff(ptype_df,axis=1)/self.samplerate
+            # pdr_arr = aligned_deriv
+            # pdr_arr = (aligned_deriv>0.0).astype(int)
             if smooth:
-                # pdr_arr = np.array([utils.smooth(x,int(han_size/self.samplerate)) for x in pdr_arr])
-                pdr_arr =  np.array([utils.butter_highpass_filter(x,4,1/self.samplerate,filtype='low') for x in pdr_arr])
-            aligned_pdrs.append(pd.DataFrame(pdr_arr,index=ptype.index))
+                pdr_arr = np.array([utils.smooth(x,int(1/self.samplerate)) for x in pdr_arr])
+                # pdr_arr =  np.array([utils.butter_filter(x, 2, 1 / self.samplerate, filtype='low') for x in pdr_arr])
+            aligned_pdrs.append(pd.DataFrame(pdr_arr,index=ptype_df.index))
             # aligned_pdrs = pd.DataFrame(aligned_pdrs,index=ptype.index)
+            # assert np.all(pdr_arr>=0.0)
 
         fig, ax = None,None
         if plot:
@@ -514,7 +695,8 @@ class Main:
             ax.axvline(0,ls='--',color='k')
             ax.set_title('Dilation rate aligned to ToneTime')
             fig.set_size_inches(8,6)
-
+        for df in aligned_pdrs:
+            assert np.all(df.to_numpy()>=0.0)
         return fig, ax, aligned_pdrs
 
     def get_pupil_delta(self, aligned_data,animals,labels,delta_metric='sum',window=(0,1.5),delta=True):
@@ -583,6 +765,31 @@ class Main:
         fig.set_tight_layout(True)
         fig.canvas.manager.set_window_title('Pupil Delta by animal')
         return fig,axes
+
+    def pupilts_by_session(self, dataclass, dataclass_dict, key2use, animals2plot, dates2plot, eventnames, dateconds,
+                           align_point, tsplots_by_animal, tsplots_by_animal_ntrials=None, ntrials=None,plttype='ts'):
+
+        if isinstance(key2use,(list, tuple)):
+            key2use = key2use[0]
+        for ai,animal in enumerate(animals2plot):
+            for di, date2plot in enumerate(dates2plot):
+                if date2plot not in pd.concat(dataclass_dict[key2use][2],axis=0).loc[:,animal,:].index.get_level_values('date'):
+                    continue
+                get_subset(dataclass,dataclass_dict,key2use,{'date':[date2plot],'name':animal},eventnames,
+                           f'{align_point} time', plttitle=dateconds[di], level2filt='name',plttype=plttype,
+                           pltaxis=(tsplots_by_animal[0],tsplots_by_animal[1][ai,di]))
+                tsplots_by_animal[1][ai, di].set_title('')
+                if ai == len(animals2plot)-1:
+                    tsplots_by_animal[1][ai, di].set_xlabel(f'Time since {align_point[0]} (s)')
+                if ai == 0:
+                    tsplots_by_animal[1][ai, di].set_title(dateconds[di])
+                if tsplots_by_animal_ntrials:
+                    get_subset(dataclass, dataclass_dict, key2use, {'date': [date2plot], 'name': animal},
+                               eventnames, f'{align_point} time', plttitle=dateconds[di],
+                               level2filt='name', ntrials=ntrials,
+                               pltaxis=(tsplots_by_animal_ntrials[0], tsplots_by_animal_ntrials[1][ai, di]))
+                    tsplots_by_animal_ntrials[1][ai, di].set_title('')
+
 
 
 if __name__ == "__main__":
@@ -834,3 +1041,4 @@ if __name__ == "__main__":
                     run.fam_05[cond_name][0].savefig(fig_path)
                 else:
                     print('path exists, not overwriting')
+

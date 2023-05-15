@@ -1,10 +1,13 @@
+import time
+
 from pupil_analysis_func import Main, get_subset
 import os
 from matplotlib import pyplot as plt
+import analysis_utils as utils
 
 if __name__ == "__main__":
     # pkldir = r'W:\mouse_pupillometry\working_pickles'
-    pkldir = r'C:\bonsai\gd_analysis\pickles'
+    pkldir = r'c:\bonsai\gd_analysis\pickles'
 
     # pkl2use = r'pickles\human_familiarity_3d_200Hz_015Shan_driftcorr_hpass01.pkl'
     # pkl2use = r'pickles\human_class1_3d_200Hz_015Shan_driftcorr_hpass01_no29.pkl'
@@ -16,14 +19,14 @@ if __name__ == "__main__":
     # pkl2use = r'/Volumes/akrami/mouse_pupillometry/pickles/DO48_fam_3d_200Hz_015Shan_driftcorr_hpass01_wdlc.pkl'
 
     # pkl2use = os.path.join(pkldir,'mouse_normdev_2d_90Hz_025Shan_driftcorr_hpass025_wdlc_TOM.pkl')
-    pkl2use = os.path.join(pkldir,'mouse_hf_fam_2d_90Hz_driftcorr_lpass4_hpass02_hanning025_TOM_newdlc.pkl')
+    pkl2use = os.path.join(pkldir,r'human_fam_3d_90Hz_driftcorr_lpass_detrend2_hpass01_flipped_TOM_hanning015.pkl')
 
 
     # pkl2use = r'pickles\mouse_fam_post_2d_90Hz_025Shan_driftcorr_nohpass_wdlc_TOM.pkl'
 
     run = Main(pkl2use, (-1,3))
-    plt.ion()
-    fig_subdir = 'norm_dev_hf'
+
+    fig_subdir = r'W:\mouse_pupillometry\figures\human_fam'
     if not os.path.isdir(os.path.join(run.figdir, fig_subdir)):
         os.mkdir(os.path.join(run.figdir, fig_subdir))
         run.figdir = os.path.join(run.figdir, fig_subdir)
@@ -33,7 +36,8 @@ if __name__ == "__main__":
     paradigm = ['familiarity']
     # paradigm = ['familiarity','0.5_fam']
     # pmetric2use = 'dlc_radii_a_zscored'
-    pmetric2use = 'dlc_EW_zscored'
+    pmetrics = ['diameter_3d_zscored','dlc_radii_a_zscored','dlc_EW_zscored','rawarea_zscored']
+    pmetric2use = pmetrics[0]
 
     # run.whitenoise_hit_miss = run.get_aligned([['a1'], ['a0']],
     #                                           event='WhiteNoise',
@@ -42,28 +46,31 @@ if __name__ == "__main__":
     #                                           align_col='Gap_Time_dt', pmetric=pmetric2use, use4pupil=True)
 
     if 'familiarity' in paradigm:  # analysis to run for familiarity paradigm
-        run.familiarity = run.get_aligned([['e!0','plow','tones4','a1'],['e!0','tones4','p0.5','a1'],
-                                           ['e!0','tones4','phigh','a1'], ['e=0','a1']],
-                                          event_shift=[0.0, 0.0, 0.0, 0.0],
+        run.familiarity = run.get_aligned([['e!0','plow'],['e!0','pmed'],
+                                           ['e!0','phigh'],['e!0','ppost'], ['e=0']],
+                                          event_shift=[0.0, 0.0, 0.0,0.0, 0.0],
                                           event='ToneTime', xlabel='Time since pattern onset',
-                                          plotlabels=['0.1','0.5','0.9','control'], plotsess=False, pdr=False,
-                                          use4pupil=False,
+                                          plotlabels=['0.1','0.4','0.9','0.6','control'], plotsess=False, pdr=False,
+                                          use4pupil=True,
                                           pmetric=pmetric2use
                                           )
-        # run.familiarity = run.get_aligned([['e=0','phigh','a1'], ['e=0','a1']],
-        #                                   event_shift=[0.0,0.0], align_col='Gap_Time_dt',
-        #                                   event='White Noise', xlabel='Time since pattern onset',
-        #                                   plotlabels=['0.9','control'], plotsess=False, pdr=False,
-        #                                   use4pupil=False,
-        #                                   pmetric=pmetric2use
-        #                                   )
+        # run.familiarity[0].savefig('human_fam_diameter3d.svg')
+        run.familiarity[0].show()
+        run.fam_whitenoise = run.get_aligned([['e!0','plow'],['e!0','pmed'],
+                                           ['e!0','phigh'],['e!0','ppost'], ['e=0']],
+                                          event_shift=[0.0, 0.0, 0.0,0.0, 0.0],
+                                          event='ToneTime', xlabel='Time since pattern onset',
+                                          plotlabels=['0.1','0.4','0.9','0.6','control'], plotsess=False, pdr=False,
+                                          use4pupil=True,
+                                          pmetric=pmetric2use
+                                          )
         # run.fam_firsts = run.get_firsts(run.familiarity,8,['0.1','0.4','0.9','0.6','control'],'ToneTime')
-        shuffle = False
-        if shuffle:  # decide whether to shuffle
-            for i in range(5):
-                run.get_firsts(run.familiarity,8,['0.1','0.4','0.9','0.6','control'],'ToneTime',shuffle=True)
-
-        run.add_stage3_05_order()
+        # shuffle = False
+        # if shuffle:  # decide whether to shuffle
+        #     for i in range(5):
+        #         run.get_firsts(run.familiarity,8,['0.1','0.4','0.9','0.6','control'],'ToneTime',shuffle=True)
+        #
+        # run.add_stage3_05_order()
 
 
         # run.fam_firsts_pdr = run.get_firsts(run.familiarity,8,['0.1','0.4','0.9','0.6','control'],'ToneTime',pdr=True)
@@ -74,7 +81,7 @@ if __name__ == "__main__":
         #                                  plotlabels=['correct'],align_col='RewardTone_Time_dt',pdr=True)
         #run.fam_delta = run.get_pupil_delta(run.familiarity[2],['DO48'],['0.1','0.4','0.9','0.6','control'],window=[0,1])
 
-        run_ntones_analysis = True
+        run_ntones_analysis = False
         if run_ntones_analysis:
             fig= plt.figure()
             ax1 = plt.subplot2grid(shape=(2, 3), loc=(0, 0), colspan=3)
@@ -104,35 +111,38 @@ if __name__ == "__main__":
         stages = [4]
 
         column = 'ToneTime_dt'
-        shifts = [[0.0,'ToneTime'],[0.5,'Violation']]
+        shifts = [[0.0,'ToneTime'],[0.75,'Violation']]
 
         # column = 'Gap_Time_dt'
         # shifts = [[0.0,'Whitenoise']]
 
         # events = ['d0','d!0','none']
-        events = ['d0','d1',]
-        labels = ['Normal', 'AB_D',]
+        # events = ['d0','d1','d2']
+        # labels = ['Normal', 'Deviant','None']
         # events = ['d0','d1','d2','d3','none']
         # labels = ['Normal', 'AB_D','ABC_','AB__','None']
+        events = ['d0','d1','d-1','none']
+        labels = ['Normal', 'AB_D','New Normal','None']
         keys = []
         pattern_types = []
 
         run.normdev = {}
         for s in stages:
+            plt.ion()
             for shift in shifts:
                 cond_name = f'stage{s}_{events}_{column}_{shift[0]}'
                 event_filters = []
                 for e in events:
                     if e[0] == 'd':
-                        event_filters.append(['e!0', 's3', e, f'stage{s}','a1','tones4'])
+                        event_filters.append(['e!0', e,'tones4'])  # 'tones4
                     elif e == 'none':
-                        event_filters.append(['e=0', 's3', f'stage{s}','a1'])
+                        event_filters.append(['e=0'])
 
                 run.normdev[cond_name] = run.get_aligned(event_filters, pmetric=pmetric2use,
                                                          event_shift=[shift[0]]*len(event_filters), align_col=column,
                                                          event=shift[1], xlabel=f'Time since {shift[1]}', pdr=False,
                                                          plotlabels=labels[:len(event_filters)],use4pupil=True,
-                                                         plotsess=False,plot=True)
+                                                         plotsess=True)
                 keys.append(cond_name)
                 run.normdev[cond_name][0].canvas.manager.set_window_title(cond_name)
                 fig_savename = f'{cond_name}_a.svg'
@@ -141,18 +151,21 @@ if __name__ == "__main__":
                     file_suffix = os.path.splitext(fig_path)[0][-1]
                     fig_path = f'{os.path.splitext(fig_path)[0][:-1]}' \
                                f'{chr(ord(file_suffix)+1)}{os.path.splitext(fig_path)[1]}'
+                    for char in ['[',']',"'"]:
+                        fig_path = fig_path.replace(char,'')
+                    fig_path = fig_path.replace(', ','_')
                 if not os.path.exists(fig_path):
                     run.normdev[cond_name][0].savefig(fig_path)
                 else:
                     print('path exists, not overwriting')
 
         dates2plot = run.normdev[keys[0]][2][0].index.get_level_values('date').unique()
-        # for ki,key in enumerate(keys):
-        #     for date2plot in list(dates2plot):
+        for ki,key in enumerate(keys):
+            for date2plot in list(dates2plot):
                 # get_subset(run, run.normdev, keys[ki], {'date': [date2plot]},
                 #            labels, f'{pmetric2use} time')
-                # get_subset(run, run.normdev, keys[ki], {'date': [date2plot]},
-                #            labels, f'{column.split("_")[0]} time',ntrials=[None,10,10])
+                get_subset(run, run.normdev, keys[ki], {'date': [date2plot]},
+                           labels, f'{column.split("_")[0]} time',ntrials=[None,10,10])
 
 
             # get_subset(run, run.normdev, keys[0],{'name': run.labels},)

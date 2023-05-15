@@ -66,7 +66,7 @@ def main(eye_video_paths, eye_ts_paths,show_video,invert_gray_im,show_2d,rotate)
                             ellipse_3d["angle"],
                             0,
                             360,  # start/end angle for drawing
-                            (0, 255, 0),  # color (BGR): red
+                            (0, 0, 255),  # color (BGR): red
                         )
                         if show_2d:
                             cv2.ellipse(
@@ -76,7 +76,7 @@ def main(eye_video_paths, eye_ts_paths,show_video,invert_gray_im,show_2d,rotate)
                             ellipse_2d["angle"],
                             0,
                             360,  # start/end angle for drawingpup
-                            (0, 0, 255),  # color (BGR): red
+                            (0, 255, 255),  # color (BGR): red
                         )
                         # show frame
                         if show_video:
@@ -99,11 +99,11 @@ def main(eye_video_paths, eye_ts_paths,show_video,invert_gray_im,show_2d,rotate)
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("eye_video_paths")
-    parser.add_argument("eye_ts_paths")
+    parser.add_argument("--eye_ts_paths",default='none')
     parser.add_argument("--show_video",default=1,type=int)
     parser.add_argument("--invert",default=0,type=int)
     parser.add_argument("--rotate",default=0,type=int)
-    parser.add_argument("--show2d",default=0,type=int)
+    parser.add_argument("--show2d",default=1,type=int)
     args = parser.parse_args()
     main(args.eye_video_paths, args.eye_ts_paths,args.show_video,args.invert,args.show2d,args.rotate)
 

@@ -1,6 +1,6 @@
 import pandas as pd
-from datetime import datetime
-from analysis_utils import merge_sessions, find_good_sessions, add_datetimecol
+from datetime import datetime, date, timedelta
+from analysis_utils import merge_sessions, find_good_sessions, add_datetimecol, format_timestr
 import os
 from os.path import join
 from functools import lru_cache
@@ -52,8 +52,8 @@ def correctdrift(timeseries, syncseries1, syncseries2) -> pd.Series:
     print(f' first {syncdiff.iloc[0]} last{syncdiff.iloc[-1]}, scalar {drift_scalar}')
     # correct drift dt*scale factor3.3
     corrected_ts = timeseries.apply(lambda t: t + ((t - timeseries0) * (-drift_scalar)))
-    print(f'original endtime: {timeseries.iloc[-1]},correct endtime: {corrected_ts.iloc[-1]}')
     # corrected_ts = timeseries
+    print(f'original endtime: {timeseries.iloc[-1]},correct endtime: {corrected_ts.iloc[-1]}')
     return corrected_ts
 
 
@@ -90,7 +90,7 @@ class Main:
         """
         timescsv = pd.read_csv(times_path, header=None)
         pupilcsv = pd.read_csv(pupils_path)
-
+        pupilcsv = pupilcsv[pupilcsv.eye_id==0]
         # split pupilcsv into 2d and 3d
         list_df = [pupilcsv[pupilcsv['topic'] == topic] for topic in sorted(pupilcsv['topic'].unique())]
         pupilcsv_2d, pupilcsv_3d = list_df[0].copy(deep=True), list_df[1].copy(deep=True)
@@ -98,11 +98,14 @@ class Main:
         pupilcsv_3d.index = np.arange(len(pupilcsv_3d.index))
 
         # format times to timestamps
+        arb_date = date.fromisoformat('2020-01-01')
         timescsv.columns = ['pctime', 'pupiltime', 'bonsaitime']
-        timescsv['pctime'] = timescsv['pctime'].apply(lambda e: datetime.strptime(f'010101 {e}',
-                                                                                '%d%m%y %H:%M:%S.%f').timestamp())
-        timescsv['bonsaitime'] = timescsv['bonsaitime'].apply(lambda e: datetime.strptime(f'010101 {e[:-1]}',
-                                                                                        '%d%m%y %H:%M:%S.%f').timestamp())
+        timescsv['pctime_dt'] = format_timestr(timescsv['pctime'])
+        timescsv['pctime_dt'] = [e.replace(year=arb_date.year) for e in timescsv['pctime_dt']]
+        timescsv['pctime'] = [e.timestamp() for i,e in timescsv['pctime_dt'].iteritems()]
+        timescsv['bonsaitime_dt'] = format_timestr(timescsv['bonsaitime'])
+        timescsv['bonsaitime_dt'] = [e.replace(year=arb_date.year) for e in timescsv['bonsaitime_dt']]
+        timescsv['bonsaitime'] = [e.timestamp() for i,e in timescsv['bonsaitime_dt'].iteritems()]
 
         # correct for any drift in sync
         driftcorrected = correctdrift(pupilcsv_3d['timestamp'], timescsv['pupiltime'], timescsv['bonsaitime'])
@@ -135,7 +138,7 @@ class Main:
                     if os.path.exists(output_fullpath) and not self.overwrite:
                         print('not overwriting')
                         continue
-                    if os.path.exists(output_fullpath):  # check
+                    if os.path.exists(output_fullpath) and self.merge:  # check
                         old_df3d = pd.read_csv(output_fullpath)
                         old_df2d = pd.read_csv(output_fullpath.replace('_3d','_2d'))
                         print('path exists will merging')
@@ -147,7 +150,7 @@ class Main:
                                 self.toprocess_dict[animal][date]['extracted_pupilsfile'])
                         aligned2dsave = pd.concat([old_df2d,aligned[0]])
                         aligned2dsave.to_csv(output_fullpath.replace('_3d','_2d') ,index=False)
-                        aligned3dsave = pd.concat([old_df3d,aligned[0]])
+                        aligned3dsave = pd.concat([old_df3d,aligned[1]])
                         aligned3dsave.to_csv(join(output_fullpath),index=False)
                     except KeyError:
                             print('keyerror')
@@ -156,7 +159,7 @@ class Main:
 
 
 if __name__ == '__main__':
-    subject_type = 'mice'
+    subject_type = 'humans'
 
     if subject_type in ['mice', 'rats']:
         animals = ['DO45','DO46','DO47','DO48','ES01','ES02','ES03','DO50','DO51','DO53']
@@ -178,12 +181,20 @@ if __name__ == '__main__':
         run.main_loop()
 
     else:
-        # humans = [f'Human{i}' for i in range(16,28)]
-        # humandates = ['220208','220209','220210','220215',
-        #               '220311','220316','220405','220407','220407','220408','220422','220425']
+        task = 'normdev'
+        # human fam task
+        if task == 'fam':
+            humans = [f'Human{i}' for i in range(20,28)]
+            humandates = [#'220208','220209','220210','220215',
+                          '220311','220316','220405','220407','220407','220408','220422','220425']
         # humans dev norm task
-        humans = [f'Human{i}' for i in range(28,33)]
-        humandates = ['220518','220523', '220524', '220530','220627']
+        elif task == 'normdev':
+            humans = [f'Human{i}' for i in range(28, 33)]
+            humandates = ['220518', '220523', '220524', '220530', '220627']
+
+        else:
+            print('invalid task name given')
+            exit()
         run = Main(humans,humandates,r'W:\humanpsychophysics\HumanXDetection\Data',r'C:\bonsai\data\Hilde\Human\timeSyncs',
-                   'aligned_class1',overwrite=True,merge=0)
+                   f'aligned_{task}',overwrite=True,merge=0)
         run.main_loop()

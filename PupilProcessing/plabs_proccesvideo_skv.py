@@ -12,7 +12,7 @@ import time
 
 def main(eye_video_paths, eye_ts_paths,show_video,invert_gray_im,show_2d):
     for eye_video_path, eye_ts_path in zip(eye_video_paths.split(','), eye_ts_paths.split(',')):
-        eye_video_path = f'{eye_video_path}\eye0.mp4'
+        # eye_video_path = f'{eye_video_path}\eye0.mp4'
         # eye_ts_path = f'{eye_ts_path}\eye0'
         if eye_ts_path.find('.npy') != -1:
             eye_ts = np.load(eye_ts_path)
@@ -24,7 +24,7 @@ def main(eye_video_paths, eye_ts_paths,show_video,invert_gray_im,show_2d):
         # create 2D detector
         detector_2d = Detector2D()
         # create pye3D detector
-        camera = CameraModel(focal_length=3.04, (256, 256))
+        camera = CameraModel(focal_length=3.04, resolution=(252, 252))
         detector_3d = Detector3D(camera=camera, long_term_mode=DetectorMode.blocking)
         # load eye video
         eye_video_meta = skvideo.io.ffprobe(eye_video_path)
@@ -63,7 +63,7 @@ def main(eye_video_paths, eye_ts_paths,show_video,invert_gray_im,show_2d):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("eye_video_paths")
-    parser.add_argument("eye_ts_paths")
+    parser.add_argument("--eye_ts_paths",default='')
     parser.add_argument("--show_video",default=1,type=int)
     parser.add_argument("--invert",default=0,type=int)
     parser.add_argument("--show2d",default=0,type=int)
