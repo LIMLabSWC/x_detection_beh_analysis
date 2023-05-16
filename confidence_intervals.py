@@ -8,8 +8,8 @@ def bootstrap_ci(data):
         #takes an aligned pupil trace
         # --> dataframe of bootstrapped medians
         means = [] #empty list to store mean of each bootstrap
-        for i in range(100): #number of bootstraps, now 100 because my mac struggles with more
-                bt_data = pd.DataFrame(columns=trace.columns) #making empty df with pupil traces lenght
+        for i in range(100):
+                bt_data = pd.DataFrame(columns=trace.columns) #making empty df with pupil traces length
                 for k in range(trace.shape[0]): #making the bootstrapped data same size as acutal
                     selected_num = random.choice(range(trace.shape[0])) #for each new row, select random old
                     bt_data = pd.concat([bt_data,trace[selected_num: selected_num + 1]]) #append new row

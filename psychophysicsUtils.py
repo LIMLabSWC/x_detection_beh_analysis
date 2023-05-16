@@ -263,10 +263,10 @@ Basically, PupilLabs doesn't have a constant FPS which messes with later filteri
 def uniformSample(dataArray, timeArray, new_dt = None, aligntimes = None, verbose = True):
 	dt = get_dt(timeArray)
 
-	if verbose == True:
-		if aligntimes is None: 
+	if verbose:
+		if aligntimes is None:
 			print("Uniformly sampling  data to %gHz (current frequency ~%gHz)" %(int(1/new_dt),int(1/dt)))
-		else: 
+		else:
 			print("Sampling to match given time series")
 
 	newTimeArray = []
@@ -328,14 +328,15 @@ Returns:
 •pupilDiams with outliers set to zero
 •a boolean array identifying outliers (True) and inliers (False)
 """
-def removeOutliers(dataArray,timeArray,n_speed=2.5,n_size=2.5, plotHist=False): #following Leys et al 2013 
-	print("Removing speed outliers", end="")
+def removeOutliers(dataArray,timeArray,n_speed=2.5,n_size=2.5, plotHist=False): #following Leys et al 2013
+	print("Removing speed outliers")
 	size = dataArray
-	absSpeed = np.zeros(len(dataArray))
-	data = dataArray
-	for i in range(len(dataArray)):
-		absSpeed[i]=max(np.abs((data[i]-data[i-1])/(timeArray[i]-timeArray[i-1])),np.abs((data[(i+1)%len(data)]-data[i])/(timeArray[(i+1)%len(data)]-timeArray[i])))
-
+	# absSpeed = np.zeros(len(dataArray))
+	data = copy(dataArray)
+	# for i in range(len(dataArray)):
+	# 	absSpeed[i]=max(np.abs((data[i]-data[i-1])/(timeArray[i]-timeArray[i-1])),np.abs((data[(i+1)%len(data)]-data[i])/(timeArray[(i+1)%len(data)]-timeArray[i])))
+	absSpeed = np.abs(np.diff(np.pad(dataArray,[1,0]))/np.nanmedian(np.abs(np.diff(timeArray))))
+	absSpeed[0] = 0.0
 	MAD_speed = np.nanmedian(np.abs(absSpeed - np.nanmedian(absSpeed)))
 	MAD_size = np.nanmedian(np.abs(size - np.nanmedian(size)))
 	threshold_speed_low = np.nanmedian(absSpeed) - n_speed*MAD_speed
@@ -343,17 +344,20 @@ def removeOutliers(dataArray,timeArray,n_speed=2.5,n_size=2.5, plotHist=False): 
 	threshold_speed_high = np.nanmedian(absSpeed) + n_speed*MAD_speed
 	threshold_size_high = np.nanmedian(size) + n_size*MAD_size
 	
-	data = data * (absSpeed<threshold_speed_high) * (absSpeed>threshold_speed_low)
-	print(" (%.2f%%) " %(100*(1-np.sum((absSpeed<threshold_speed_high) * (absSpeed>threshold_speed_low))/len(data))),end="")
+	# data = data * (absSpeed<threshold_speed_high) * (absSpeed>threshold_speed_low)
+	# print(" (%.2f%%) " %(100*(1-np.sum((absSpeed<threshold_speed_high) * (absSpeed>threshold_speed_low))/len(data))),end="")
 
-	print(f'High thresh:{threshold_size_high}, Low thresh: {threshold_size_low}')
-	data = data * (data>threshold_size_low) * (data!=0)#only take away low sizes and zero values
-	print("and size lowliers/zero (%.2f%%) " %(100*(1-np.sum((size>threshold_size_low)*((size!=0)))/len(data))), end="")
-	
-	print(" (additional %.2f%% removed vs raw)" %(100*(np.sum(data == 0) - np.sum(dataArray==0))/len(data)))
+	data[data<threshold_size_low] = 0.0
+	data[data>threshold_size_high] = 0.0
+	print(f'High thresh:{threshold_size_high}, Low thresh: {threshold_size_low} \n Size out = {(data==0).mean()*100}%')
+	# data[absSpeed>threshold_speed_high] = 0.0 #only take away low sizes and zero values
+	# print(f'Speed thresh:{threshold_size_high} \n Speed out ={(absSpeed>threshold_speed_high).mean()*100}% ')
 
+	isOutlier = data == 0.0
+	if isOutlier.mean() > 0.9:
+		print('baddd')
+	print(f'Percent outlier = {isOutlier.mean()*100}%')
 	# data = np.nan_to_num(data)
-	
 	if plotHist == True: #plots histograms and thresholds
 		fig, ax = plt.subplots(1,2)
 		ax[0].hist(np.log(absSpeed),bins=30)
@@ -366,8 +370,8 @@ def removeOutliers(dataArray,timeArray,n_speed=2.5,n_size=2.5, plotHist=False): 
 		ax[1].axvline(x=threshold_size_high,c='k')
 		ax[0].set_title("data")
 		ax[1].set_title("d data / dt ")
-	isOutlier = np.invert((absSpeed<threshold_speed_high) * (absSpeed>threshold_speed_low) * (dataArray>threshold_size_low) * (dataArray!=0))  #
-	
+	# isOutlier = np.invert((absSpeed<threshold_speed_high) * (absSpeed>threshold_speed_low) * (dataArray>threshold_size_low) * (dataArray!=0))  #
+
 	return data, isOutlier
 
 
@@ -714,9 +718,9 @@ class pupilDataClass():
 	def zScore(self):
 		self.pupilDiams = zScore(self.pupilDiams, normrange=[60,self.times[-1]-60]) 
 
-	def plot(self, title=None, zoomRange = [0,60], saveName = None, hist=True, ymin='-ymax', ymax=None):
+	def plot(self,figdir, title=None, zoomRange = [0,60], saveName = None, hist=True, ymin='-ymax', ymax=None):
 		fig, ax = plotData(self.pupilDiams, self.times, title=title, zoomRange = zoomRange, saveName = saveName, ymin=ymin, ymax=ymax, isInterpolated=self.isInterpolated, isOutlier=self.isOutlier)
-		saveFigure(fig,f"_{saveName}_pupildata")
+		saveFigure(fig,figdir,f"_{saveName}_pupildata")
 
 	def loadAndProcessTrialData(self):
 		self.trialData, self.times = loadAndProcessTrialData(self.name, self.times)
@@ -1223,15 +1227,13 @@ Parameters:
 Returns:
 Nothing is returned
 """
-def saveFigure(fig,saveTitle=None):
-	today = datetime.strftime(datetime.now(),'%y%m%d')
-	if not os.path.isdir(f"./figures/{today}/"):
-		os.mkdir(f"./figures/{today}/")
+def saveFigure(fig,figdir,saveTitle=None):
+	if not os.path.isdir(figdir):
+		os.mkdir(figdir)
 	if saveTitle is None: 
 		saveTitle=""
-	figdir = f"./figures/{today}/"
 	now = datetime.strftime(datetime.now(),'%H%M')
-	fig.savefig(f"{figdir}{saveTitle}_{now}.png", dpi=300)
+	fig.savefig(os.path.join(figdir,f"{saveTitle}_{now}.png"), dpi=300)
 	
 	return
 
@@ -1376,7 +1378,6 @@ def interpolatepupil(dataSeries, gapExtension = 0.2) ->pd.Series:
 
 
 def removeouts(dataseries, n_speed=2.5, n_size=2.5, plotHist=False): #following Leys et al 2013
-	print("Removing speed outliers", end="\n")
 	size = dataseries
 	timeseries = pd.Series(dataseries.index)
 	absspeed = timeseries.diff().abs()
