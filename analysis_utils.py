@@ -1370,7 +1370,7 @@ def unique_file_path(path, suffix='_a'):
     if not isinstance(path, (pathlib.WindowsPath, pathlib.PosixPath)):
         path = Path(path)
     if suffix:
-        path = path.with_stem(f'{path}{suffix}')
+        path = path.with_stem(f'{path.stem}{suffix}')
     while path.exists():
         new_stem = f'{path.stem[:-1]}{chr(ord(path.stem[-1])+1)}'
         path = path.with_stem(new_stem)
