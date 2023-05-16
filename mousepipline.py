@@ -13,10 +13,19 @@ from PupilProcessing.pupilpipeline import Main as Main
 from pathlib import Path
 import yaml
 from loguru import logger
+from rich.logging import RichHandler
+from pyinspect import install_traceback
 import argparse
 
+
 if __name__ == "__main__":
-    logger_path = Path.cwd()/'log'/'logfile.txt'
+    install_traceback()
+
+    logger.configure(
+        handlers=[{"sink": RichHandler(markup=True), "format": "{message}"}]
+    )
+
+    logger_path = Path.cwd()/'log'/'log.txt'
     logger_path = utils.unique_file_path(logger_path)
     logger.add(logger_path,level='INFO')
 

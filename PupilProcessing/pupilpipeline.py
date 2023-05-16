@@ -13,6 +13,8 @@ import pathlib
 from pathlib import Path
 import yaml
 from loguru import logger
+from rich.logging import RichHandler
+from pyinspect import install_traceback
 import psutil
 import argparse
 
