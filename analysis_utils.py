@@ -1,4 +1,3 @@
-import sklearn.linear_model
 from operator import itemgetter
 from psychophysicsUtils import pupilDataClass
 import pandas as pd
@@ -21,8 +20,9 @@ import glob
 import scipy.stats
 import pathlib
 from pathlib import Path
-from loguru import logger
-
+import jax
+import jax.numpy as jnp
+import jax.lax as lax
 
 def merge_sessions(datadir,animal_list,filestr_cond, date_range, datestr_format='%y%m%d') -> list:
     """
@@ -90,6 +90,7 @@ def merge_sessions(datadir,animal_list,filestr_cond, date_range, datestr_format=
                                                      for e in loaded_file['Bonsai_time']].copy()
                                         loaded_file['Bonsai_time_dt'] = time_conv
                                     else:
+                                        pass
                                         add_datetimecol(loaded_file,'Bonsai_time')
                                 if 'Trial_Start_Time' in loaded_file.columns:
                                     loaded_file.rename(index=str, columns={'Trial_Start_Time': 'Trial_Start'}, inplace=True)
@@ -488,7 +489,7 @@ def plot_frametimes(datfile):
 #     plot[1].fill_between(high, low, alpha=0.1)
 
 def add_datetimecol(df, colname, timefmt='%H:%M:%S.%f'):
-
+    start = time.time()
     datetime_arr = []
     date_array = df.index.to_frame()['Date']
     date_array_dt = [datetime.strptime(d,'%y%m%d') for d in date_array]
@@ -517,6 +518,46 @@ def add_datetimecol(df, colname, timefmt='%H:%M:%S.%f'):
         return None
     try:df[f'{colname}_dt'] = np.array(merged_date_array)
     except ValueError: print('Value error, add dt col ')
+    print(f'{colname} {time.time()-start} S')
+# def add_datetimecol(df, colname, timefmt='%H:%M:%S.%f'):
+#
+#     @jax.jit
+#     def process_time(t):
+#         print(type(t))
+#         # if isinstance(t, str):
+#         print('line 525')
+#         t = t.split('+')[0]
+#         t_split = t.split('.')
+#         t_hms = t_split[0]
+#         if len(t_split) == 2:
+#             t_ms = t.split('.')[1]
+#         else:
+#             t_ms = '0'
+#         try:
+#             t_hms_dt = datetime.strptime(t_hms, '%H:%M:%S')
+#         except ValueError:
+#             print(t_hms)
+#         t_ms_micros = round(float(f'0.{t_ms}'), 6) * 1e6
+#         t_dt = t_hms_dt.replace(microsecond=int(t_ms_micros))
+#         return t_dt
+#         # else:
+#         #     return jnp.nan
+#
+#     date_array = df.index.to_frame()['Date']
+#     date_array_dt = jnp.array([datetime.strptime(d, '%y%m%d').timestamp() for d in date_array])
+#
+#     datetime_arr = jax.vmap(process_time)(jax.numpy.array(df[colname]))
+#
+#     _dt_df = jnp.column_stack((date_array_dt, datetime_arr))
+#     merged_date_array = lax.map(lambda x: x[1].replace(year=x[0].year, month=x[0].month, day=x[0].day),
+#                                 (_dt_df[i] for i in range(len(list(_dt_df)))))
+#
+#     merged_date_array = jnp.array(list(merged_date_array))  # Convert to JAX array
+#
+#     df[f'{colname}_dt'] = merged_date_array
+#
+#     return df
+
 
 def align2eventScalar(df, timeseries_data, pupiltimes, pupiloutliers, beh, dur, filters=('4pupil', 'b1', 'c1'), baseline=False, eventshift=0,
                       outlierthresh=0.5, stdthresh=20, subset=None) -> pd.DataFrame:
