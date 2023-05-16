@@ -9,7 +9,6 @@
 
 echo "loading conda env"
 module load miniconda
-module load cuda/11.6
 
 source activate process_pupil
 

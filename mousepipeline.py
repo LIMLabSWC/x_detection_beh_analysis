@@ -24,8 +24,9 @@ if __name__ == "__main__":
     logger.configure(
         handlers=[{"sink": RichHandler(markup=True), "format": "{message}"}]
     )
-
-    logger_path = Path.cwd()/'log'/'log.txt'
+    logger.info('started and loading config')
+    today_str = datetime.today().date().strftime('%y%m%d')
+    logger_path = Path.cwd()/f'log'/f'log_{today_str}.txt'
     logger_path = utils.unique_file_path(logger_path)
     logger.add(logger_path,level='INFO')
 
@@ -36,6 +37,8 @@ if __name__ == "__main__":
 
     with open(args.config_file, 'r') as file:
         config = yaml.safe_load(file)
+
+    logger.info('loaded config')
 
     tdatadir = Path(config['tdatadir'])
     pdatadir = Path(config['pdatadir'])
