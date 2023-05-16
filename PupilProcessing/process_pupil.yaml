@@ -1,0 +1,25 @@
+# process_pupil.yaml
+
+
+# install: conda env create -f process_pupil.yaml
+# update:  conda env update -f process_pupil.yaml
+name: process_pupil
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - jupyter
+  - nb_conda
+  - ffmpeg
+  - pip:
+    - "numpy"
+    - "pandas"
+    - "pyyaml"
+    - "loguru"
+    - "scipy"
+    - "circle_fit"
+    - "sklearn"
+    - "rich"
+    - "pyinspect"
