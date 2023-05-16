@@ -31,7 +31,7 @@ if __name__ == "__main__":
     logger.add(logger_path,level='INFO')
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('config_file')
+    parser.add_argument('config_file', default=Path('config','mouse_fam_conf_windows.yaml'))
     parser.add_argument('date', default=None)
     args = parser.parse_args()
 
@@ -60,9 +60,9 @@ if __name__ == "__main__":
     dirstyle = config['dirstyle']
 
     if dirstyle == 'N_D_it':
-        list_aligned = list(pdatadir.rglob('*.h5'))
-        aligneddir = os.path.split(pdatadir)[-1]
-
+        list_aligned = list(pdatadir.iterdir())
+        # list_aligned = list(pdatadir.rglob('*.h5'))
+        aligneddir = ''
     else:
         list_aligned = list(pdatadir.iterdir())
         aligneddir = ''
