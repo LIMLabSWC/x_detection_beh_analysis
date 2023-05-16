@@ -69,6 +69,7 @@ if __name__ == "__main__":
     splitdir = np.unique(np.array([f.name.split('_')[:-1]
                                   for i,f in enumerate(list_aligned) if 'harpbins' not in f.name]),
                          axis=0)
+    logger.info('got unique animals and dates combos')
     # splitdir = np.vstack([[np.array(path.parts) for path in list_aligned]])
     dir_animals, dir_animaldates = splitdir[:, 0], splitdir[:, 1]
     # animals2process = ['DO54','DO55','DO56','DO57']
