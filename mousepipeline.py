@@ -55,21 +55,23 @@ if __name__ == "__main__":
     # pdatadir =r'W:\mouse_pupillometry\mouse_hf'
     # pdatadir = r'W:\mouse_pupillometry\mouse_hf_normdev'
 
-    pkl_prefix = pdatadir.parts[-2]
+    pkl_prefix = pdatadir.parts[-1]
     # dirstyle = 'N_D_it'
     dirstyle = config['dirstyle']
 
     if dirstyle == 'N_D_it':
         list_aligned = list(pdatadir.rglob('*.h5'))
+        aligneddir = os.path.split(pdatadir)[-1]
+
     else:
         list_aligned = list(pdatadir.iterdir())
+        aligneddir = ''
+
     # if 'harpbins' in list_aligned:
     #     list_aligned.remove('harpbins')
-    aligneddir = os.path.split(pdatadir)[-1]
     splitdir = np.unique(np.array([f.name.split('_')[:-1]
                                   for i,f in enumerate(list_aligned) if 'harpbins' not in f.name]),
                          axis=0)
-    logger.info('got unique animals and dates combos')
     # splitdir = np.vstack([[np.array(path.parts) for path in list_aligned]])
     dir_animals, dir_animaldates = splitdir[:, 0], splitdir[:, 1]
     # animals2process = ['DO54','DO55','DO56','DO57']
@@ -144,4 +146,5 @@ if __name__ == "__main__":
                lowtype=lowtype, dirstyle=dirstyle, dlc_filtflag=True, redo=None,
                preprocess_pklname=Path(config['pkl_dir'], config['preprocess_pkl']),use_ttl=config['use_TTL'],
                protocol='probreward')
+    logger.info('Main class initialised')
     run.load_pdata()
