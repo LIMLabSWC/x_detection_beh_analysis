@@ -37,8 +37,9 @@ if __name__ == "__main__":
     with open(args.config_file, 'r') as file:
         config = yaml.safe_load(file)
 
-    tdatadir = config['tdatadir']
-    pdatadir = config['pdatadir']
+    tdatadir = Path(config['tdatadir'])
+    pdatadir = Path(config['pdatadir'])
+    assert tdatadir.is_dir() and pdatadir.is_dir()
 
     # pdatadir = r'W:\mouse_pupillometry\mousenormdev\aligned_mousenormdev_stage5'
     # pdatadir = r'W:\mouse_pupillometry\mousenormdev_swap\aligned_mousenormdev_swap'
@@ -51,18 +52,21 @@ if __name__ == "__main__":
     # pdatadir =r'W:\mouse_pupillometry\mouse_hf'
     # pdatadir = r'W:\mouse_pupillometry\mouse_hf_normdev'
 
-    pkl_prefix = pdatadir.split('\\')[2]
+    pkl_prefix = pdatadir.parts[-2]
     # dirstyle = 'N_D_it'
     dirstyle = config['dirstyle']
 
     if dirstyle == 'N_D_it':
-        list_aligned = os.listdir(pdatadir)
+        list_aligned = list(pdatadir.rglob('*.h5'))
     else:
-        list_aligned = os.listdir(pdatadir)
-    if 'harpbins' in list_aligned:
-        list_aligned.remove('harpbins')
+        list_aligned = list(pdatadir.iterdir())
+    # if 'harpbins' in list_aligned:
+    #     list_aligned.remove('harpbins')
     aligneddir = os.path.split(pdatadir)[-1]
-    splitdir = np.vstack([[np.array(path.split('_')) for path in list_aligned]])
+    splitdir = np.unique(np.array([f.name.split('_')[:-1]
+                                  for i,f in enumerate(list_aligned) if 'harpbins' not in f.name]),
+                         axis=0)
+    # splitdir = np.vstack([[np.array(path.parts) for path in list_aligned]])
     dir_animals, dir_animaldates = splitdir[:, 0], splitdir[:, 1]
     # animals2process = ['DO54','DO55','DO56','DO57']
     # animals2process = ['DO58','DO59','DO60','DO62']
