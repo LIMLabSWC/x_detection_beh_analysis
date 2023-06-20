@@ -329,7 +329,6 @@ Returns:
 •a boolean array identifying outliers (True) and inliers (False)
 """
 def removeOutliers(dataArray,timeArray,n_speed=2.5,n_size=2.5, plotHist=False): #following Leys et al 2013
-	print("Removing speed outliers")
 	size = dataArray
 	# absSpeed = np.zeros(len(dataArray))
 	data = copy(dataArray)

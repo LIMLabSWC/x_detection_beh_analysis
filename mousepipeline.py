@@ -30,9 +30,14 @@ if __name__ == "__main__":
     logger_path = utils.unique_file_path(logger_path)
     logger.add(logger_path,level='INFO')
 
+    install_traceback()
+    logger.configure(
+        handlers=[{"sink": RichHandler(markup=True), "format": "{message}"}]
+    )
+
     parser = argparse.ArgumentParser()
-    parser.add_argument('config_file', default=Path('config','mouse_fam_conf_windows.yaml'))
-    parser.add_argument('date', default=None)
+    parser.add_argument('--config_file', default=Path('config','mouse_fam_conf_windows.yaml'))
+    parser.add_argument('-date', default=None)
     args = parser.parse_args()
 
     with open(args.config_file, 'r') as file:
@@ -74,29 +79,7 @@ if __name__ == "__main__":
                          axis=0)
     # splitdir = np.vstack([[np.array(path.parts) for path in list_aligned]])
     dir_animals, dir_animaldates = splitdir[:, 0], splitdir[:, 1]
-    # animals2process = ['DO54','DO55','DO56','DO57']
-    # animals2process = ['DO58','DO59','DO60','DO62']
-    # animals2process = ['DO54','DO55','DO56','DO57','DO58','DO59','DO60','DO62']
-    # animals2process= ['DO57']
-    # dates2process = [
-    #                 # '221111','221114','221115','221116','221117','221118',
-    #                 '221214','221215','230116','230117', '230119',
-    #                 '230214','230216','230217','230221',
-    #                 '230222','230223','230224','230228','230301','230303'
-    #                 ]  # fam dates
-    # dates2process = ['230216','230217','230221',
-    #                 '230222','230223','230224','230228','230301', '230302','230303']  # new animal fam dates
-    # dates2process = ['230116','230117','230119']*4  # normdev dates
-    # dates2process = ['230126','230127','230206','230207']
-    # dates2process = ['230201','230202','230203','230206','230207','230208','230211'] # probreward dates
-    # dates2process = ['230306','230307','230308','230310']  # new normdev 0.1 rate
-    # dates2process = ['230317']
-    # # old
-    # aligneddir = os.path.split(pdatadir)[-1]
-    # splitdir = np.array([path.split('_') for path in os.listdir(pdatadir)])
-    # animals, animaldates = splitdir[:,0], splitdir[:,1]
-    # spec_animal = []
-    # spec_animal_dates = []
+
 
     if args.date:
         dates2process=[args.date]
@@ -110,7 +93,9 @@ if __name__ == "__main__":
                 if e not in animals2process:
                     continue
             else:
-                animals2process.append(e)
+                if spec_dates:
+                    if d not in dates2process:
+                        continue
                 dates2process.append(dir_animaldates[i])
             if spec_dates:
                 if d in dates2process:
@@ -135,8 +120,8 @@ if __name__ == "__main__":
     pdata_topic = config['pdata_topic']
     han_size_str = f'hanning{str(han_size).replace(".","")}'*bool(han_size)
 
-    pklname = f'{pkl_prefix}_fam_{pdata_topic.split("_")[1]}_{int(fs)}Hz_lpass{str(bandpass_met[1]).replace(".", "")}' \
-              f'{han_size_str}_TOM{"_rawsize" * (not do_zscore)}noTTL_.pkl'
+    pklname = f'{pkl_prefix}_{config["protocol"]}_{pdata_topic.split("_")[1]}_{int(fs)}Hz_hpass{str(bandpass_met[0]).replace(".", "")}_lpass{str(bandpass_met[1]).replace(".", "")}' \
+              f'{han_size_str}_TOM{"_rawsize" * (not do_zscore)}.pkl'
     # pklname = r'mouse_fm_fam_2d_90Hz_hpass00_hanning025_detrend.pkl'
     # preprocess_pkl =f'{pkl_prefix}_fam_w_LR_noTTL.pkl'
 

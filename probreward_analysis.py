@@ -98,7 +98,7 @@ if __name__ == "__main__":
         tsplots_by_animal_ntrials = plt.subplots(len(animals2plot), len(dates2plot), squeeze=False, sharex='all', sharey='all')
         histplots_reactiontime = plt.subplots(len(animals2plot), squeeze=False, sharex='all', sharey='all')
         key2use = 0
-        ntrials = 5
+        ntrials = 5000
         # plot_traces(animals2plot,dates2plot,run.probreward[keys[key2use][0][0]],run.duration,fs=run.samplerate,
         #             cmap_name='gray',pltax=tsplots_by_animal,linealpha=0.1,cmap_flag=False)
         for ai,animal in enumerate(animals2plot):
@@ -127,12 +127,17 @@ if __name__ == "__main__":
         tsplots_by_animal_ntrials[0].savefig(os.path.join(run.figdir, rf'tspupil_byanimal_noindv_ntrials_both.svg'),
                                      bbox_inches='tight')
         allsess_ntrials_ts_plot = plt.subplots(nrows=2,ncols=len(dates2plot),squeeze=False,sharey='row')
+        ntrial_plot_data = []
         for ni, (ntrial, n_name) in enumerate(zip([ntrials, ntrials*-1],['First','Last'])):
+            if ntrial <0:
+                n_start_idx = ntrial*-1
+            else:
+                n_start_idx = 0
             for di, date2plot in enumerate(dates2plot):
-                get_subset(run, run.aligned, keys[key2use][0][0], {'date': [date2plot], 'name': []},
-                           eventnames[key2use], f'{align_pnts[align_idx]} time', plttitle=f'{dateconds[di]}, {n_name} {abs(ntrials)} trials',
-                           level2filt='name', ntrials=(ntrial, ntrial), plttype='ts', pdelta_wind=[0.5,2.5],
-                           pltaxis=(allsess_ntrials_ts_plot[0], allsess_ntrials_ts_plot[1][ni, di]))
+                ntrial_plot_data.append(get_subset(run, run.aligned, keys[key2use][0][0], {'date': [date2plot], 'name': []},
+                                        eventnames[key2use], f'{align_pnts[align_idx]} time', plttitle=f'{dateconds[di]}, {n_name} {abs(ntrials)} trials',
+                                        level2filt='name', ntrials=(ntrial, ntrial), plttype='ts', pdelta_wind=[0.5,2.5],
+                                        pltaxis=(allsess_ntrials_ts_plot[0], allsess_ntrials_ts_plot[1][ni, di]), ntrial_start_idx=n_start_idx)[2]),
             allsess_ntrials_ts_plot[0].set_size_inches(6*len(dates2plot),12)
             # utils.unique_legend(allsess_ntrials_ts_plot,fontsize=9)
         allsess_ntrials_ts_plot[0].set_constrained_layout('contrained')

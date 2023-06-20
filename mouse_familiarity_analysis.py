@@ -1,7 +1,7 @@
+import math
 import time
 
 import matplotlib.colors
-import statsmodels.api as sm
 from pupil_analysis_func import Main, get_fig_mosaic
 import matplotlib.pyplot as plt
 from matplotlib import cm
@@ -11,10 +11,10 @@ import os
 import analysis_utils as utils
 from copy import deepcopy as copy
 from behaviour_analysis import TDAnalysis
+import math
 import pickle
 from datetime import datetime, timedelta
 from scipy.signal import find_peaks, find_peaks_cwt
-import ruptures as rpt
 from pupil_analysis_func import batch_analysis, plot_traces, get_subset, glm_from_baseline
 
 
@@ -23,11 +23,11 @@ if __name__ == "__main__":
     # paradigm = ['altvsrand','normdev']
     # paradigm = ['normdev']
     paradigm = ['familiarity']
-    pkldir = r'c:\bonsai\gd_analysis\pickles'
-    pkl2use = os.path.join(pkldir,'mouse_fm_fam_2d_90Hz_hpass00_hanning025_detrend.pkl')
-    # pkl2use = os.path.join(pkldir,r'mouseprobreward_2d_90Hz_6lpass_025hpass_wdlc_TOM_interpol_all_int02s_221028.pkl')
+    # pkldir = r'c:\bonsai\gd_analysis\pickles'
+    pkldir = r'X:\Dammy\mouse_pupillometry\pickles'
+    pkl2use = os.path.join(pkldir,'mouse_hf_fam_2d_90Hz_hpass001_lpass4hanning025_TOM.pkl')
 
-    run = Main(pkl2use, (-1.0, 3.0), figdir=rf'W:\mouse_pupillometry\figures\mouse_fm_fam',fig_ow=False)
+    run = Main(pkl2use, (-1.0, 3.0), figdir=rf'W:\mouse_pupillometry\figures\mouse_2305mice_fam',fig_ow=True)
     pmetric2use = ['diameter_2d_zscored','dlc_radii_a_zscored','dlc_EW_zscored','dlc_EW_normed']
 
     do_baseline = True  # 'rawsize' not in pkl2use
@@ -68,26 +68,8 @@ if __name__ == "__main__":
                       ]
 
         keys = []
-        list_cond_filts = {
-            'p_rate': [[['plow'],['p0.5'],['phigh'],['none']],
-                       ['0.1','0.5','0.9','control']],
-            'p_rate_ctrl': [[['plow'], ['plow', 'e=0'], ['p0.5'], ['p0.5', 'e=0'], ['phigh'], ['phigh', 'e=0']],
-                            ['0.1','0.1 cntrl','0.5','0.5 cntrl','0.9','0.9 cntrl','control']],
-            'p_onset': [[['dearly','p0.5'], ['dlate','p0.5'], ['dmid','p0.5']],
-                        ['Early Pattern', 'Late Pattern','Middle Presentation']],
-            # 'p0.5_block': [[['0.5_0','p0.5'], ['0.5_1','p0.5'], ['0.5_2','p0.5'], ['none']],
-            #                ['0.5 Block (0.0)', '0.5 Block 1 (0.1)', '0.5 Block 2 (0.9)', 'Control']],
-            'alt_rand': [[['s0', 'p0.5'], ['s1','p0.5'], ['none','p0.5']],
-                         ['0.5 Random', '0.5 Alternating', 'Control']],
-            'alt_rand_ctrl': [[['s0','p0.5'], ['s0', 'e=0'],  ['s1','p0.5'], ['s1','p0.5', 'e=0'], ['none','p0.5']],
-                              ['0.5 Random','0.5 Random ctrl', '0.5 Alternating', '0.5 Alternating ctrl', 'Control']],
-            # 'ntones': [[['p0.5','tones4'],['p0.5','tones3'],['p0.5','tones2'],['p0.5','tones1']],['ABCD', 'ABC','AB','A']],
-            # 'pat_nonpatt': [[['e!0'],['e=0']],['Pattern Sequence Trials','No Pattern Sequence Trials']],
-            'pat_nonpatt_2X': [[['e!0'], ['e=0']], ['Pattern Sequence Trials', 'No Pattern Sequence Trials']],
-            'p_rate_fm': [[['plow'], ['pmed'], ['phigh'],['ppost'], ['none']],
-                       ['0.1', '0.5', '0.9','0.6', 'control']],
 
-        }
+        condition_keys = ['p_rate', 'p_rate_ctrl', 'p_onset', 'alt_rand', 'alt_rand_ctrl', 'pat_nonpatt_2X', 'p_rate_fm']
 
         aligned_pklfile = r'pickles\fm_fam_aligned.pkl'
         # aligned_pklfile = r'pickles\DO54_62_aligned_notrend.pkl'
@@ -97,81 +79,11 @@ if __name__ == "__main__":
                 run.aligned = pickle.load(pklfile)
 
                 keys = [[e] for e in run.aligned.keys()]
-        else:
-            for cond_i, (cond_filts,cond_key) in enumerate(zip(list_cond_filts.values(),list_cond_filts.keys())):
-                keys.append(batch_analysis(run, run.aligned, stages, f'{align_pnts[0]}_dt', [[0, f'{align_pnts[0]}'], ],
-                                           cond_filts[0], cond_filts[1], pmetric=pmetric2use[2],
-                                           filter_df=True, plot=True, sep_cond_cntrl_flag=False, cond_name=cond_key,
-                                           use4pupil=True, baseline=do_baseline, pdr=False, extra_filts=['a1']))  #'a1'
+        list_cond_filts = utils.get_condition_dict(run, condition_keys,stages,)  #'a1'
 
-            # subtract control traces and plot
-            for key in ['p_rate_ctrl','alt_rand_ctrl']:
-                run.aligned[f'{key}_sub'] = copy(run.aligned[key])
-                keys.append([list(run.aligned.keys())[-1]])
-                for ti,tone_df in enumerate(run.aligned[key][2]):
-                    if (ti%2 == 0 or ti == 0) and ti < len(run.aligned[key][2])-1:
-                        print(ti)
-                        control_tone_df = run.aligned[key][2][ti+1].copy()
-                        for sess_idx in tone_df.index.droplevel('time').unique():
-                            sess_ctrl_mean = control_tone_df.loc[:,[sess_idx[0]],[sess_idx[1]]].mean(axis=0)
-                            tone_df.loc[:,sess_idx[0],sess_idx[1]] = tone_df.loc[:,[sess_idx[0]],[sess_idx[1]]]-sess_ctrl_mean
-                        # run.aligned[f'{key}_sub'][2][ti] = copy(tone_df)-run.aligned[key][2][ti+1].mean(axis=0)
-                        run.aligned[f'{key}_sub'][2][ti] = copy(tone_df)
-                for idx in [1,2]:
-                    if idx<(len(run.aligned[key][2])):
-                        run.aligned[f'{key}_sub'][2].pop(idx)
+        with open(aligned_pklfile, 'wb') as pklfile:
+            pickle.dump(run.aligned,pklfile)
 
-            with open(aligned_pklfile, 'wb') as pklfile:
-                pickle.dump(run.aligned,pklfile)
-
-        # keys.append(batch_analysis(run, run.aligned, stages, f'{align_pnts[0]}_dt', [[0, f'{align_pnts[0]} '], ],
-        #                            [['dearly'], ['dlate'], ['dmid']], eventnames[1], pmetric=pmetric2use[2],
-        #                            filter_df=True, plot=True,
-        #                            use4pupil=True, baseline=do_baseline, pdr=False,
-        #                            extra_filts=['tones4', 'p0.5']))
-        # keys.append(batch_analysis(run, run.aligned, stages, f'{align_pnts[0]}_dt', [[0, f'{align_pnts[0]} '], ],
-        #                            [['plow'],['plow','e=0'],['p0.5'],['p0.5','e=0'],['phigh'],['phigh','e=0'],],
-        #                            eventnames[2], pmetric=pmetric2use[3],
-        #                            filter_df=True, plot=False,
-        #                            use4pupil=True, baseline=do_baseline, pdr=False,
-        #                            extra_filts=['tones4']))
-        #
-        # # # subtract control traces and plot
-        # run.aligned[f'{keys[2][0]}_nocontrols'] = copy(run.aligned[keys[2][0]])
-        # keys.append([list(run.aligned.keys())[-1]])
-        # for ti,tone_df in enumerate(run.aligned[keys[2][0]][2]):
-        #     if ti%2 == 0 or ti == 0:
-        #         run.aligned[keys[3][0]][2][ti] = copy(tone_df)-run.aligned[keys[2][0]][2][ti+1].mean(axis=0)
-        # for idx in [1,2,3]:
-        #     run.aligned[keys[3][0]][2].pop(idx)
-        #
-        # run.add_stage3_05_order()
-        # keys.append(batch_analysis(run, run.aligned, stages, f'{align_pnts[0]}_dt', [[0, f'{align_pnts[0]} '], ],
-        #                            [['0.5_0'], ['0.5_1'], ['0.5_2'], ['none']],
-        #                            eventnames[2], pmetric=pmetric2use[2],
-        #                            filter_df=True, plot=True,
-        #                            use4pupil=True, baseline=do_baseline, pdr=False,
-        #                            extra_filts=['tones4', 'p0.5']))
-        # keys.append(batch_analysis(run, run.aligned, stages, f'{align_pnts[0]}_dt', [[0, f'{align_pnts[0]} '], ],
-        #                            [['s0'], ['s1'],['none']],
-        #                            eventnames[5], pmetric=pmetric2use[2],
-        #                            filter_df=True, plot=False,
-        #                            use4pupil=True, baseline=do_baseline, pdr=False,
-        #                            extra_filts=['tones4',  'p0.5']))
-        # keys.append(batch_analysis(run, run.aligned, stages, f'{align_pnts[0]}_dt', [[0, f'{align_pnts[0]} '], ],
-        #                            [['s0'],['s0','e=0'], ['s1'],['s1','e=0'],['none']],
-        #                            eventnames[5], pmetric=pmetric2use[2],
-        #                            filter_df=True, plot=False,
-        #                            use4pupil=True, baseline=do_baseline, pdr=False,
-        #                            extra_filts=['tones4', 'p0.5']))
-        # # subtract control traces and plot
-        # run.aligned[f'{keys[6][0]}_nocontrols'] = copy(run.aligned[keys[6][0]])
-        # keys.append([list(run.aligned.keys())[-1]])
-        # for ti,tone_df in enumerate(run.aligned[keys[6][0]][2][:-1]):
-        #     if ti%2 == 0 or ti == 0:
-        #         run.aligned[keys[7][0]][2][ti] = copy(tone_df)-run.aligned[keys[6][0]][2][ti+1].mean(axis=0)
-        # for idx in [1,2]:
-        #     run.aligned[keys[7][0]][2].pop(idx)
 
         run.aligned['alt_rand_nocontrol'] = copy(run.aligned['alt_rand'])
         run.aligned['alt_rand_nocontrol'][2].pop(2)
@@ -226,18 +138,18 @@ if __name__ == "__main__":
                 tsplots_by_animal[0].savefig(os.path.join(run.figdir, rf'tspupil_byanimal_{key_suffix}.svg'),
                                              bbox_inches='tight')
 
-        base_plt_title = 'Evolution of pupil response with successive licks'
-
-        plot_tsdelta = plt.subplots()
-        utils.plot_eventaligned(run.aligned[keys[3][0]][2],eventnames[3],run.duration,'ToneTime',plot_tsdelta)
-        plot_tsdelta[1].set_ylabel('\u0394 zscored pupil size from condition control')
-        plot_tsdelta[1].set_xlabel('Time since Pattern Onset (s)')
-        plot_tsdelta[0].savefig(os.path.join(run.figdir,'deltacontrols_pupilts_patt_rate.svg'),bbox_inches='tight')
+        # base_plt_title = 'Evolution of pupil response with successive licks'
+        #
+        # plot_tsdelta = plt.subplots()
+        # utils.plot_eventaligned(run.aligned[keys[3][0]][2],eventnames[3],run.duration,'ToneTime',plot_tsdelta)
+        # plot_tsdelta[1].set_ylabel('\u0394 zscored pupil size from condition control')
+        # plot_tsdelta[1].set_xlabel('Time since Pattern Onset (s)')
+        # plot_tsdelta[0].savefig(os.path.join(run.figdir,'deltacontrols_pupilts_patt_rate.svg'),bbox_inches='tight')
 
         # pattern non pattern ananlysis
         pattnonpatt_tsplots = plt.subplots()
-        get_subset(run, run.aligned, 'pat_nonpatt', list_cond_filts['pat_nonpatt'][1],
-                   list_cond_filts['pat_nonpatt'][1], plttitle='Response to Pattern onset across conditions', plttype='ts',
+        get_subset(run, run.aligned, 'pat_nonpatt_2X', list_cond_filts['pat_nonpatt_2X'][1],
+                   list_cond_filts['pat_nonpatt_2X'][1], plttitle='Response to Pattern onset across conditions', plttype='ts',
                    ylabel='zscored pupil size', xlabel=f'Time since Pattern start (s)',
                    pltaxis=pattnonpatt_tsplots
                    )
@@ -245,37 +157,60 @@ if __name__ == "__main__":
         pattnonpatt_tsplots[0].set_constrained_layout('constrained')
         pattnonpatt_tsplots[0].savefig(os.path.join(run.figdir,'patt_nonpatt_ts_allltrials.svg'),
                                        bbox_inches='tight')
-        utils.ts_permutation_test(run.aligned['pat_nonpatt'][2],500,0.95,1,pattnonpatt_tsplots,run.duration)
+        # utils.ts_permutation_test(run.aligned['pat_nonpatt_2X'][2],500,0.95,1,pattnonpatt_tsplots,run.duration)
         pattnonpatt_tsplots[0].show()
 
         # prate analysis
-        p_rate_dates = ['230214', '230216', '230221', '230222', '230113', ]  # '230223', '230224'
+        # p_rate_dates = ['230214', '230216', '230221', '230222', '230113', ]  # '230223', '230224'
+        p_rate_dates= [
+            '230531',
+            '230601',
+            '230602',
+            '230605',
+            '230606',
+            '230607',
+            '230608',
+            '230609',
+            ]
         p_rate_tsplots = plt.subplots(figsize=(9,7))
 
-        prate_aligned = get_subset(run,run.aligned,'p_rate',{None:None}, events=list_cond_filts['p_rate'][1],
-                   beh=f'{align_pnts[0]} onset', plttitle='Response to Pattern onset across conditions', plttype='pdelta_trend',
+        prate_aligned = get_subset(run,run.aligned,'p_rate',{'date':p_rate_dates}, events=list_cond_filts['p_rate'][1],
+                   beh=f'{align_pnts[0]} onset', plttitle='Response to Pattern onset across conditions', plttype='ts',
                    ylabel='zscored pupil size', xlabel=f'Time since Pattern Onset (s)',
                    pltaxis=p_rate_tsplots,exclude_idx=[None],ctrl_idx=3
                    )
         p_rate_tsplots[0].show()
-        utils.ts_permutation_test(prate_aligned[2],50000,0.95,3,p_rate_tsplots,run.duration)
+        # utils.ts_permutation_test(prate_aligned[2],5000,0.95,3,p_rate_tsplots,run.duration)
         p_rate_tsplots[0].show()
 
+        p_rate_over_dates_tsplot = plt.subplots(ncols=len(p_rate_dates),squeeze=False,sharey='all')
+        for di,date in enumerate(p_rate_dates):
+            get_subset(run, run.aligned, 'p_rate', {'date': date}, events=list_cond_filts['p_rate'][1],
+                       beh=f'{align_pnts[0]} onset', plttitle='Response to Pattern onset across conditions',
+                       plttype='ts',
+                       ylabel='zscored pupil size', xlabel=f'Time since Pattern Onset (s)',
+                       pltaxis=(p_rate_over_dates_tsplot[0],p_rate_over_dates_tsplot[1][0,di]),
+                       exclude_idx=[None], ctrl_idx=3
+                       )
+        p_rate_over_dates_tsplot[0].set_size_inches(16,7)
+        p_rate_over_dates_tsplot[0].show()
         # example multiple prate plots over dates
-        prate_example_dates = [p_rate_dates[-1],p_rate_dates[0],p_rate_dates[-2]]
-        prate_multiple_dates_plot = plt.subplots(ncols=len(prate_example_dates), figsize=(9*len(prate_example_dates),7),sharey='all')
+        prate_example_dates = p_rate_dates
+        prate_multiple_dates_plot = plt.subplots(ncols=4,nrows=math.ceil(len(p_rate_dates)/4),
+                                                 figsize=(9*4,14),sharey='all')
         for di,date2plot in enumerate(prate_example_dates):
             prate_aligned = get_subset(run, run.aligned, 'p_rate', {'date': date2plot}, events=list_cond_filts['p_rate'][1],
                                        beh=f'{align_pnts[0]} onset',
-                                       plttitle=f'Response to pattern onset example day {di+1}', plttype='ts',
+                                       plttitle=f'Response to pattern onset {date2plot}', plttype='ts',
                                        ylabel='zscored pupil size', xlabel=f'Time since pattern onset (s)',
-                                       pltaxis=(prate_multiple_dates_plot[0],prate_multiple_dates_plot[1][di]),
+                                       pltaxis=(prate_multiple_dates_plot[0],
+                                                prate_multiple_dates_plot[1][int(di/4),di%4]),
                                        )
         prate_multiple_dates_plot[0].set_constrained_layout('constrained')
         prate_multiple_dates_plot[0].show()
 
         print('break now if wanted')
-        time.sleep(10)
+        time.sleep(30)
 
 
         # alt rand analysis

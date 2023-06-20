@@ -22,8 +22,9 @@ if __name__ == "__main__":
     # paradigm = ['altvsrand','normdev']
     paradigm = ['normdev']
     # paradigm = ['familiarity']
-    pkldir = r'c:\bonsai\gd_analysis\pickles'
-    pkl2use = os.path.join(pkldir,'mouse_hf_normdev_2d_90Hz_driftcorr_lpass4_hpass00_hanning025_TOM_w_LR_detrend_wTTL_nospdouts.pkl')
+    # pkldir = r'c:\bonsai\gd_analysis\pickles'
+    pkldir = r'X:\Dammy/mouse_pupillometry\pickles'
+    pkl2use = os.path.join(pkldir,'mouse_hf_normdev_2d_90Hz_hpass004_lpass4hanning025_TOM.pkl')
     # pkl2use = os.path.join(pkldir,r'mouseprobreward_2d_90Hz_6lpass_025hpass_wdlc_TOM_interpol_all_int02s_221028.pkl')
 
     run = Main(pkl2use, (-1.0, 5.0), figdir=rf'W:\mouse_pupillometry\figures\mouse_normdev',fig_ow=False)
@@ -32,7 +33,7 @@ if __name__ == "__main__":
     do_baseline = True  # 'rawsize' not in pkl2use
     if 'normdev' in paradigm:
         run.add_pretone_dt()
-        run.add_lick_in_window_bool('ToneTime_dt')
+        # run.add_lick_in_window_bool('ToneTime_dt')
         run.add_viol_diff()
         run.aligned = {}
         align_pnts = ['ToneTime','Reward','Gap_Time','Violation','Trial_Start']
@@ -54,10 +55,42 @@ if __name__ == "__main__":
                       ['Normal', 'AB_D','AB__','Shifted Normal'],
                       ['Normal', 'AB_D','AB__','Shifted Normal']]
 
+        # list_cond_filts = {
+        #     'normdev': [[['d0'],['d!0'] ],['Normal', 'Deviant']],
+        #     'pat_nonpatt_2X': [[['e!0'], ['none']], ['Pattern Sequence Trials', 'No Pattern Sequence Trials']],
+        # }
+
         keys = []
-        keys.append(batch_analysis(run, run.aligned, stages, f'{align_pnts[0]}_dt', [[0.0, f'{align_pnts[0]}'], ],
-                                   [['d0'],['d!0'] ], eventnames[0], pmetric=pmetric2use[1], filter_df=True, plot=True,
-                                   use4pupil=True, baseline=do_baseline, pdr=False, extra_filts=['a1','tones4','s3','noplicks']))
+
+
+        aligned_pklfile = r'pickles\normdev_2305cohort_fam_aligned.pkl'
+        # aligned_pklfile = r'pickles\DO54_62_aligned_notrend.pkl'
+        aligned_ow = True
+        if os.path.isfile(aligned_pklfile) and not aligned_ow:
+            with open(aligned_pklfile,'rb') as pklfile:
+                run.aligned = pickle.load(pklfile)
+
+                keys = [[e] for e in run.aligned.keys()]
+        else:
+            list_cond_filts = utils.get_condition_dict(run, ['normdev', 'pat_nonpatt_2X','normdev_newnorms'], stages, )
+            with open(aligned_pklfile,'wb') as pklfile:
+                pickle.dump(run.aligned,pklfile)
+
+            # for cond_i, (cond_filts,cond_key) in enumerate(zip(list_cond_filts.values(),list_cond_filts.keys())):
+            #     if '2X' in cond_key:
+            #         cond_align_point = align_pnts[2]
+            #     else:
+            #         cond_align_point = align_pnts[0]
+            #     keys.append(batch_analysis(run, run.aligned, stages, f'{cond_align_point}_dt', [[0, f'{cond_align_point}'], ],
+            #                                cond_filts[0], cond_filts[1], pmetric=pmetric2use[2],
+            #                                filter_df=True, plot=True, sep_cond_cntrl_flag=False, cond_name=cond_key,
+            #                                use4pupil=True, baseline=do_baseline, pdr=False, extra_filts=[]))  #'a1'
+
+
+
+        # keys.append(batch_analysis(run, run.aligned, stages, f'{align_pnts[0]}_dt', [[0.0, f'{align_pnts[0]}'], ],
+        #                            [['d0'],['d!0'] ], eventnames[0], pmetric=pmetric2use[1], filter_df=True, plot=True,
+        #                            use4pupil=True, baseline=do_baseline, pdr=False, extra_filts=['a1','tones4','s2',]))  # 'noplicks'
         # keys.append(batch_analysis(run, run.aligned, stages, f'{align_pnts[0]}_dt', [[0.0, f'{align_pnts[0]}'], ],
         #                            [['d0'],['d!0','d_C2B'],['d!0','d_C2A'],['d!0','d_C2D']], eventnames[1],
         #                            pmetric=pmetric2use[1], filter_df=True, plot=True,
@@ -120,6 +153,26 @@ if __name__ == "__main__":
                 utils.unique_legend(tsplots_by_animal)
                 tsplots_by_animal[0].savefig(os.path.join(run.figdir, rf'tspupil_byanimal_{key_suffix}.svg'),
                                              bbox_inches='tight')
+
+    normdev_tsplot = plt.subplots(figsize=(9, 7))
+    normdev_aligned = get_subset(run, run.aligned, 'normdev_newnorms', {'date': '230608'},
+                                 events=list_cond_filts['normdev_newnorms'][1],
+                               beh=f'{align_pnts[0]} onset', plttitle='Response to Pattern onset across conditions',
+                               plttype='ts',
+                               ylabel='zscored pupil size', xlabel=f'Time since Pattern Onset (s)',
+                               pltaxis=normdev_tsplot, exclude_idx=[None], ctrl_idx=3,
+                               )
+    normdev_tsplot[0].show()
+
+    normdev_tsplot_bysess = plt.subplots(nrows=2,ncols=2,figsize=(18, 14))
+    plots = plot_traces(run.labels, ['230608'], run.aligned['normdev_newnorms'], run.duration, run.samplerate,
+                        cmap_flag=True, cond_subset=[1],binsize=5,binskip=3)
+    utils.unique_legend([plots[0], plots[1]])
+    plots[0].show()
+    # for ai, animal in enumerate(run.labels):
+
+
+
 
     base_plt_title = 'Evolution of pupil response with successive licks'
     # animals2plot = ['DO54','DO55','DO56','DO57']

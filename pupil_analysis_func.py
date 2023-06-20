@@ -62,7 +62,7 @@ def batch_analysis(dataclass,dataclass_dict,stages,column,shifts,events,labels,p
                     if any([ee[0] in ['d','p'] for ee in e]):
                         event_filters.append(['e!0', f'stage{s}']+e+extra_filts)
                     elif 'none' in e:
-                        none_filt = (['e=0', f'stage{s}']+extra_filts)
+                        none_filt = (['c1', f'stage{s}']+extra_filts)
                         if 'tones4' in none_filt:
                             none_filt.remove('tones4')
                         if 'e!0' in none_filt:
@@ -73,11 +73,12 @@ def batch_analysis(dataclass,dataclass_dict,stages,column,shifts,events,labels,p
             else:
                 event_filters.append(event_filters)
             for e in event_filters:
-                if 'none' in e or 'e=0' in e:
+                if 'none' in e or 'e=0' in e or 'c1' in e:
                     if 'tones4' in e:
                         e.remove('tones4')
                     if 'e!0' in e:
                         e.remove('e!0')
+                    print(f'none filts = {e}')
                 if 's1' in e:
                     print(e)
             dataclass_dict[cond_name] = dataclass.get_aligned(event_filters,event_shift=[shift[0]] * len(event_filters), align_col=column,
@@ -232,7 +233,7 @@ def get_subset(dataclass, dataclass_dict, cond_name, filters=(None,), events=Non
         return aligned_subset_fig,aligned_subset_ax, aligned_subset
 
 
-def plot_traces(iter1, iter2, data, dur, fs, control_idx=0, cond_subset=None, cmap_name='RdBu_r', binsize=0,
+def plot_traces(iter1, iter2, data, dur, fs, control_idx=0, cond_subset=None, cmap_name='RdBu_r', binsize=0, binskip=1,
                 cmpap_lbls=('start', 'end'),pltax=None, cmap_flag=True,linealpha=0.5,
                 plotformatdict=None):
     lines = ["--", "-.", ":", "-"]
@@ -240,7 +241,7 @@ def plot_traces(iter1, iter2, data, dur, fs, control_idx=0, cond_subset=None, cm
     if iter1 == 'all':
         iter1 = [data[2][0].index.get_level_values('name').unique()]
     if iter2 == 'all':
-        iter2 = [data[2][0].index.get_level_values('name').unique()]
+        iter2 = [data[2][0].index.get_level_values('date').unique()]
 
     if isinstance(data, (list,tuple)):
         if len(data) >= 2:
@@ -268,31 +269,31 @@ def plot_traces(iter1, iter2, data, dur, fs, control_idx=0, cond_subset=None, cm
 
     for i1, e1 in enumerate(iter1):
         for i2, e2 in enumerate(iter2):
-            if (e1, e2) not in working_dfs[0].index.droplevel('time').to_series().unique():
+            if (e1, e2) not in list(working_dfs[0].index.droplevel('time').to_series().unique()):
                 continue
-            sess_conds_dfs = [working_dfs[cond_idx].loc[:, e1, e2] for cond_idx in list(cond_subset)]
+            sess_conds_dfs = [working_dfs[cond_idx].loc[:,[ e1],[ e2]] for cond_idx in list(cond_subset)]
 
             for si, sess_df in enumerate(sess_conds_dfs):
                 if binsize:
-                    sess_df = sess_df.rolling(binsize).mean()[binsize - 1::binsize]
+                    sess_df = sess_df.rolling(binsize).mean()[binsize - 1::binskip]
                 cmap = plt.get_cmap(cmap_name, sess_df.shape[0])
                 for i, (idx, row) in enumerate(sess_df.iterrows()):
                     if cmap:
                         linecol = cmap(i)
                     else:
                         linecol = 'lightgrey'
-                    axes[i1][i2].plot(x_ts,row, c=linecol, ls=lines[si % len(lines)],alpha=linealpha)
+                    axes[i1][i2].plot(x_ts,row, c=linecol, ls=lines[si % len(lines)],alpha=linealpha,label=f'{e1} {e2}')
             if control_idx:
                 control_df = working_dfs[control_idx].loc[:, e1, e2]
                 axes[i1][i2].plot(x_ts,control_df.mean(axis=0), c='k')
             axes[i1][i2].axvline(0, c='k', ls='--')
 
-    fig.subplots_adjust(left=0.05, bottom=0.08, right=0.925, top=0.95, wspace=0.025, hspace=0.025)
+    fig.subplots_adjust(left=0.05, bottom=0.08, right=0.85, top=0.95, wspace=0.025, hspace=0.025)
     # set cbar position
     if not cmap_flag:
         fig_cbar = None
     else:
-        x0, y0, width, height = [1.05, -.75, 0.075, 3.5]
+        x0, y0, width, height = [1.025, -.75, 0.075, 3.0]
         Bbox = matplotlib.transforms.Bbox.from_bounds(x0, y0, width, height)
         ax4cmap = axes[int((axes.shape[0]/2))][-1]
         trans = ax4cmap.transAxes + fig.transFigure.inverted()
@@ -302,12 +303,12 @@ def plot_traces(iter1, iter2, data, dur, fs, control_idx=0, cond_subset=None, cm
         norm = matplotlib.colors.Normalize()
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
         sm.set_array([])
-        fig_cbar = plt.colorbar(sm, cax=cbaxes, ticks=[0, 1], orientation='vertical')
+        fig_cbar = plt.colorbar(sm, cax=cbaxes,  orientation='vertical')
         # fig_cbar = fig.colorbar(sm, ticks=(0, 1), ax=axes[:, -1])
-        fig_cbar.lick_ts_ax.tick_params(labelsize=9)
+        # cbaxes.tick_params(labelsize=9)
 
         # label plot
-        fig_cbar.lick_ts_ax.set_yticklabels(cmpap_lbls)
+        cbaxes.set_yticks([0,1],cmpap_lbls)
     if plotformatdict:
         for ai, ax in enumerate(axes[:,0]):
             ax.set_ylabel(plotformatdict.get('ylabel'))
@@ -321,6 +322,7 @@ def plot_traces(iter1, iter2, data, dur, fs, control_idx=0, cond_subset=None, cm
         fig.canvas.manager.set_window_title(plotformatdict.get('figtitle'))
 
     return fig, axes, fig_cbar
+
 
 
 def glm_from_baseline(traces: pd.DataFrame,dur,bseln_dur,ax):
@@ -419,6 +421,9 @@ class Main:
             for sess in self.data.copy():
                 if self.data[sess].trialData is None or self.data[sess].pupildf is None:
                     self.data.pop(sess)
+
+            self.add_dt_cols2sesstd(['Trial_Start','Trial_End','Time','ToneTime','Gap_Time','RewardTone_Time'])
+
             if extra_steps:
                 self.add_pretone_dt()
             self.duration = duration_window
@@ -454,6 +459,12 @@ class Main:
             pupil_df_ix = pupil_df.index
             merged_ix = [e.replace(year=date_dt.year,month=date_dt.month,day=date_dt.day) for e in pupil_df_ix]
             pupil_df.index = merged_ix
+
+    def add_dt_cols2sesstd(self,column_names):
+        for sess in self.data:
+            sess_td = self.data[sess].trialData
+            for col in column_names:
+                utils.add_datetimecol(sess_td,col)
 
     def add_offset_ser(self):
         for sess in self.data:
@@ -495,7 +506,7 @@ class Main:
     def add_rolling_mean(self, colname, windowsize):
         for sess in self.data:
             td_df = self.data[sess].trialData
-            td_df[f'{colname}_roll'] = td_df.rolling(windowsize).mean()
+            td_df[f'{colname}_roll'] = td_df[colname].rolling(windowsize).mean()
 
     def add_lick_in_window_bool(self,colname):
         for sess in self.data:

@@ -20,9 +20,11 @@ import glob
 import scipy.stats
 import pathlib
 from pathlib import Path
-import jax
-import jax.numpy as jnp
-import jax.lax as lax
+import pickle
+import itertools
+# import jax
+# import jax.numpy as jnp
+# import jax.lax as lax
 
 def merge_sessions(datadir,animal_list,filestr_cond, date_range, datestr_format='%y%m%d') -> list:
     """
@@ -36,7 +38,7 @@ def merge_sessions(datadir,animal_list,filestr_cond, date_range, datestr_format=
 
     file_df = []
     if date_range[1] == 'now':
-        date_range[1] = datetime.strftime(datetime.now(),'%d/%m/%Y')
+        date_range[1] = datetime.strftime(datetime.now(),datestr_format)
     if date_range[0].find('/') == -1:
         _dates = []
         for d in date_range:
@@ -202,8 +204,8 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         'd2': ['Pattern_Type', 2], #
         'd3': ['Pattern_Type', 3], #
         'd4': ['Pattern_Type', [1,3]], #
-        'e!0': ['ToneTime_dt',all_dates_t0,'notin'],  # There was a tone, if 'c0'
-        'e=0': ['ToneTime_dt',all_dates_t0,'isin'], # There was no tone
+        'e!0': ['Tone_Position', 0],  # There was a tone, if 'c0'
+        'e=0': ['Tone_Position', 1], # There was no tone
         '4pupil': ['na'],
         'devrep':['PatternID',dev_repeat,'isin'], #
         'devord': ['PatternID', dev_nonorder, 'isin'],
@@ -313,13 +315,14 @@ def filt4pupil(data_df):
     gd_df = filter_df(data_df, ['a3','c0'])
     viol_df = filter_df(data_df, ['a2','c0'])
     if len(data_df)>0:
-        _df = data_df[(data_df['Trial_End_dt']-data_df['ToneTime_dt']).apply(lambda t: t.total_seconds()) >= 3]
+        _df = data_df[(data_df['Trial_End_dt']-data_df['Pretone_end_dt']).apply(lambda t: t.total_seconds()) >= 3]
     else:
         _df = data_df
     #     # _df = viol_df[(viol_df['Trial_End_scalar']-viol_df['ToneTime_scalar']) >= 2]
     #     # _df = data_df[(data_df['Trial_End_dt']-data_df['ToneTime_dt']) >= 3]
     # return pd.concat([gd_df,_df])
     return _df
+    # return data_df
 
 
 def plot_performance(data_df, stims, animal_list, date_range, marker_colors):
@@ -489,75 +492,57 @@ def plot_frametimes(datfile):
 #     plot[1].fill_between(high, low, alpha=0.1)
 
 def add_datetimecol(df, colname, timefmt='%H:%M:%S.%f'):
+    def vec_dt_replace(series, year=None, month=None, day=None,
+                       hour=None, minute= None, second=None, microsecond=None,nanosecond=None):
+        return pd.to_datetime(
+            {'year': series.dt.year if year is None else year,
+             'month': series.dt.month if month is None else month,
+             'day': series.dt.day if day is None else day,
+             'hour': series.dt.hour if hour is None else hour,
+             'minute': series.dt.minute if minute is None else minute,
+             'second': series.dt.second if second is None else second,
+             'microsecond': series.dt.microsecond if microsecond is None else microsecond,
+             'nanosecond': series.dt.nanosecond if nanosecond is None else nanosecond,
+             })
     start = time.time()
-    datetime_arr = []
+    # datetime_arr = []
     date_array = df.index.to_frame()['Date']
-    date_array_dt = [datetime.strptime(d,'%y%m%d') for d in date_array]
-    for i,t in enumerate(df[colname]):
-        if isinstance(t,str):
-            t = t.split('+')[0]
-            t_split = t.split('.')
-            t_hms = t_split[0]
-            if len(t_split) == 2:
-                t_ms = t.split('.')[1]
-            else:
-                t_ms = 0
-            try:t_hms_dt = datetime.strptime(t_hms,'%H:%M:%S')
-            except ValueError: print(t_hms)
-            t_ms_micros = round(float(f'0.{t_ms}'),6)*1e6
-            t_dt = t_hms_dt.replace(microsecond=int(t_ms_micros))
-            datetime_arr.append(t_dt)
-
-        else:
-            datetime_arr.append(np.nan)
-            # print(t,df.index[i])
-    _dt_df = pd.DataFrame(list(zip(date_array_dt,datetime_arr)))
-    try:merged_date_array = [e.replace(year=d.year,month=d.month,day=d.day) for idx,(d,e) in _dt_df.iterrows()]
-    except AttributeError:
-        print('Attribute error, add dt col')
-        return None
-    try:df[f'{colname}_dt'] = np.array(merged_date_array)
-    except ValueError: print('Value error, add dt col ')
-    print(f'{colname} {time.time()-start} S')
-# def add_datetimecol(df, colname, timefmt='%H:%M:%S.%f'):
-#
-#     @jax.jit
-#     def process_time(t):
-#         print(type(t))
-#         # if isinstance(t, str):
-#         print('line 525')
-#         t = t.split('+')[0]
-#         t_split = t.split('.')
-#         t_hms = t_split[0]
-#         if len(t_split) == 2:
-#             t_ms = t.split('.')[1]
-#         else:
-#             t_ms = '0'
-#         try:
-#             t_hms_dt = datetime.strptime(t_hms, '%H:%M:%S')
-#         except ValueError:
-#             print(t_hms)
-#         t_ms_micros = round(float(f'0.{t_ms}'), 6) * 1e6
-#         t_dt = t_hms_dt.replace(microsecond=int(t_ms_micros))
-#         return t_dt
-#         # else:
-#         #     return jnp.nan
-#
-#     date_array = df.index.to_frame()['Date']
-#     date_array_dt = jnp.array([datetime.strptime(d, '%y%m%d').timestamp() for d in date_array])
-#
-#     datetime_arr = jax.vmap(process_time)(jax.numpy.array(df[colname]))
-#
-#     _dt_df = jnp.column_stack((date_array_dt, datetime_arr))
-#     merged_date_array = lax.map(lambda x: x[1].replace(year=x[0].year, month=x[0].month, day=x[0].day),
-#                                 (_dt_df[i] for i in range(len(list(_dt_df)))))
-#
-#     merged_date_array = jnp.array(list(merged_date_array))  # Convert to JAX array
-#
-#     df[f'{colname}_dt'] = merged_date_array
-#
-#     return df
-
+    date_array_dt = pd.to_datetime(date_array,format='%y%m%d').to_list()   # [datetime.strptime(d,'%y%m%d') for d in date_array]
+    date_array_dt_ser = pd.Series(date_array_dt)
+    # for i,t in enumerate(df[colname]):
+    #     if isinstance(t,str):
+    #         t = t.split('+')[0]
+    #         t_split = t.split('.')
+    #         t_hms = t_split[0]
+    #         if len(t_split) == 2:
+    #             t_ms = t.split('.')[1]
+    #         else:
+    #             t_ms = 0
+    #         try:t_hms_dt = datetime.strptime(t_hms,'%H:%M:%S')
+    #         except ValueError: print(t_hms)
+    #         t_ms_micros = round(float(f'0.{t_ms}'),6)*1e6
+    #         t_dt = t_hms_dt.replace(microsecond=int(t_ms_micros))
+    #         datetime_arr.append(t_dt)
+    #
+    #     else:
+    #         datetime_arr.append(np.nan)
+    #         # print(t,df.index[i])
+    s = df[colname]
+    try:s_split = pd.DataFrame(s.str.split('.').to_list(),columns=['time_hms','time_decimal'])
+    except TypeError: print('typeerror')
+    s_dt = pd.to_datetime(s_split['time_hms'],format='%H:%M:%S')
+    try:s_dt = vec_dt_replace(s_dt,year=date_array_dt_ser.dt.year,month=date_array_dt_ser.dt.month,
+                          day=date_array_dt_ser.dt.day, nanosecond=pd.to_numeric(s_split['time_decimal'].str.ljust(9,'0')))
+    except:print('error')
+    df[f'{colname}_dt'] = s_dt.to_numpy()
+    # datetime_arr = pd.to_datetime(df[colname], format='%H:%M:%S.%f')
+    # _dt_df = pd.DataFrame(list(zip(date_array_dt,datetime_arr)))
+    # try:merged_date_array = [e.replace(year=d.year,month=d.month,day=d.day) for idx,(d,e) in _dt_df.iterrows()]
+    # except AttributeError:
+    #     print('Attribute error, add dt col')
+    #     return None
+    # try:df[f'{colname}_dt'] = np.array(merged_date_array)
+    # except ValueError: print('Value error, add dt col ')
 
 def align2eventScalar(df, timeseries_data, pupiltimes, pupiloutliers, beh, dur, filters=('4pupil', 'b1', 'c1'), baseline=False, eventshift=0,
                       outlierthresh=0.5, stdthresh=20, subset=None) -> pd.DataFrame:
@@ -580,6 +565,8 @@ def align2eventScalar(df, timeseries_data, pupiltimes, pupiloutliers, beh, dur, 
 
     dataseries = pd.Series(timeseries_data, index=pupiltimes)
     outlierstrace = pd.Series(pupiloutliers,index=pupiltimes)
+    if 'c1' in filters:
+        print(f'align2.. :{filters}')
     filtered_df = filter_df(df,filters)
     dur = np.array(dur)
     # print(t_len)
@@ -602,8 +589,8 @@ def align2eventScalar(df, timeseries_data, pupiltimes, pupiloutliers, beh, dur, 
     for i, eventtime in enumerate(filtered_df[beh]):
         # print(dataseries)
         # print(eventtime + timedelta(seconds=float(dur[0])),eventtime + timedelta(seconds=float(dur[1])))
-        eventtime = eventtime + timedelta(hours=float(df['Offset'].iloc[i]))
-        # eventtime = eventtime + timedelta(hours=float(0))
+        # eventtime = eventtime + timedelta(hours=float(df['Offset'].iloc[i]))
+        eventtime = eventtime + timedelta(hours=float(1))
         eventpupil = copy(dataseries.loc[eventtime + timedelta(0,dur[0]): eventtime + timedelta(0,dur[1])])
         eventoutliers = copy(outlierstrace.loc[eventtime + timedelta(0,dur[0]): eventtime + timedelta(0,dur[1])])
         # print((eventoutliers == 0.0).sum(),float(len(eventpupil)))
@@ -686,8 +673,9 @@ def getpatterntraces(data, patterntypes,beh,dur, eventshifts=None,baseline=True,
         eventshifts = np.zeros(len(patterntypes))
     for i, patternfilter in enumerate(patterntypes):
         if beh == 'ToneTime_dt':
-            if 'e=0' or 'none' in patternfilter:
+            if 'e=0' in patternfilter or 'c1' in patternfilter or 'none' in patternfilter:
                 beh = 'Pretone_end_dt'
+                print(f'getpatterntraces none {patternfilter}')
         _pattern_tonealigned = []
         if subset is not None:
             firsts, mids, lasts = [], [], []
@@ -923,32 +911,37 @@ def ts_permutation_test(ts_matrices, n_permutations, conf_interval,cnt_idx=0,  p
     :param conf_interval:
     :return:
     """
+    t0 = time.time()
     observed_diff = [np.abs(matrix.mean(axis=0) - ts_matrices[cnt_idx].mean(axis=0)) for matrix in ts_matrices]
-    observed_diff.pop(cnt_idx)
+    print(f'perm subtract time ={time.time()-t0}')
+    # observed_diff.pop(cnt_idx)
     epochs_per_matrix = [matrix.shape[0] for matrix in ts_matrices]
     epochs_start_ix = np.pad(np.cumsum(epochs_per_matrix),[1,0])
     # mega_matrix = np.vstack(ts_matrices).copy()
 
     rng = np.random.default_rng()
-    simulated_diffs = np.zeros((n_permutations,len(ts_matrices),ts_matrices[cnt_idx].shape[1]))
-    # list_mega_matrix = [np.vstack([cond_matrix,ts_matrices[cnt_idx]]) for cond_matrix in ts_matrices]
-    # for cond_matrix in list_mega_matrix:
-    #     [rng.permutation(cond_matrix, axis=1) for i in range(n_permutations)]
-    #     rng.permuted(np.tile(cond_matrix, n_permutations).reshape(n_permutations, cond_matrix.size), axis=1)
-    # mega_mega_matrix_shuffled = [rng.permutation(mega_mega_matrix,axis=1) for i in range(n_permutations)]
-    # mega_mega_shuffled_mean = np.mean(mega_mega_matrix_shuffled,axis=0)
+    # simulated_diffs = np.zeros((n_permutations,len(ts_matrices),ts_matrices[cnt_idx].shape[1]))
+    t0 = time.time()
     for cond_idx, cond_matrix in enumerate(ts_matrices):
         mega_matrix = np.vstack([cond_matrix,ts_matrices[cnt_idx]]).copy()
+        shuffled_indices = [np.random.choice(mega_matrix.shape[0], mega_matrix.shape[0], replace=False) for n in
+                            range(n_permutations)]
+        shuffled_timeseries_data = [mega_matrix[idxs, :] for idxs in shuffled_indices]
+        simulated_diffs = np.array([shuffled[:cond_matrix.shape[0]].mean(axis=0) -
+                                    shuffled[cond_matrix.shape[0]:].mean(axis=0)
+                                    for shuffled in shuffled_timeseries_data])
         shuffled_subsets = []
-        for shuffle_i in range(n_permutations):
-            mega_matrix_shuffled = rng.permutation(mega_matrix,axis=0)
-            simulated_diffs[shuffle_i,cond_idx,:] = mega_matrix_shuffled[:cond_matrix.shape[0]].mean(axis=0) - mega_matrix_shuffled[cond_matrix.shape[0]:].mean(axis=0)
+        # for shuffle_i in range(n_permutations):
+        #     mega_matrix_shuffled = rng.permutation(mega_matrix,axis=0)
+        #     simulated_diffs[shuffle_i,cond_idx,:] = mega_matrix_shuffled[:cond_matrix.shape[0]].mean(axis=0) - \
+        #                                             mega_matrix_shuffled[cond_matrix.shape[0]:].mean(axis=0)
             # shuffled_subsets.append(mega_matrix_shuffled.mean(axis=0))
 
         # _sim_diffs = [np.abs(matrix - shuffled_subsets[cnt_idx]) for matrix in shuffled_subsets]
         # if cond_idx is not cnt_idx:
         #     simulated_diffs[:,cond_idx,:] = _sim_diffs
     # simulated_diffs = np.delete(simulated_diffs,cnt_idx,axis=1)
+    print(f'shuffle time = {time.time()-t0}')
     simulated_greater_observed = np.greater(simulated_diffs,observed_diff)
     portion_above_observed = simulated_greater_observed.mean(axis=0)
     sig_time_points = portion_above_observed < ((1 - conf_interval)/2)
@@ -1061,6 +1054,8 @@ def format_timestr(timestr_series,date=None) -> (pd.Series, pd.Series):
     :return:
     """
     s=timestr_series
+    s_split = pd.DataFrame(s.str.split('.').to_list())
+    s_dt = pd.to_datetime(s_split[0],format='%H:%M:%S').replace(microsecond=pd.to_numeric(s_split[1]))
     datetime_arr = []
     for t in s:
         if isinstance(t, str):
@@ -1242,6 +1237,12 @@ def pair_dir2sess(topdir,animals, year_limit=2022, subject='mouse', dirstyle=r'Y
     return paired_dirs
 
 
+def iterate_fit_ellipse(xy_1d_array):
+
+    ellipse_estimate = (fit_elipse(xy_1d_array.reshape((int(xy_1d_array.shape[0]/2),2),order='F')))
+    return ellipse_estimate[1],ellipse_estimate[2],ellipse_estimate[0][0],ellipse_estimate[0][0]
+
+
 def fit_elipse(point_array):
     xc, yc, r1, r2 = cf.hyper_fit(point_array)
 
@@ -1251,29 +1252,47 @@ def fit_elipse(point_array):
 def get_dlc_diams(df: pd.DataFrame,n_frames: int,scorer: str,):
     if n_frames == 0:
         n_frames = df.shape[0]
-    bodypoints = np.array(df)
-    radii1_ = np.full(n_frames,np.nan)
-    radii2_ = np.full(n_frames,np.nan)
-    centersx_ = np.full(n_frames,np.nan)
-    centersy_ = np.full(n_frames,np.nan)
+    # body_points = np.array(df)
+    # radii1_ = np.full(n_frames,np.nan)
+    # radii2_ = np.full(n_frames,np.nan)
+    # centersx_ = np.full(n_frames,np.nan)
+    # centersy_ = np.full(n_frames,np.nan)
     diams_EW = np.full(n_frames,np.nan)
     edge_EW = np.full(n_frames,np.nan)
 
-    for i,row in enumerate(bodypoints[:n_frames,:]):
-        reshaped = row[0:24].reshape([8,3])
-        goodpoints = reshaped[reshaped[:,2]>.3].astype(float)
-        if goodpoints.shape[0] < 3:
-            radii1_[i] = np.nan
-            radii2_[i] = np.nan
-            centersx_[i] = np.nan
-            centersy_[i] = np.nan
+    body_points_names = np.unique(df.columns.get_level_values('bodyparts').to_list())
+    for body_point in body_points_names:
+        body_point_df = df[scorer,body_point]
+        bad_body_points = df[scorer,body_point,'likelihood']<.3
+        df.loc[bad_body_points, (scorer,body_point,'x')] = np.nan
+        df.loc[bad_body_points, (scorer,body_point,'y')] = np.nan
+    pupil_points_only_df = df.drop(['edgeE','edgeW'],axis=1,level=1)
+    bad_frames = pupil_points_only_df.isna().sum(axis=1) > 5*2
+    df.loc[bad_frames] = np.nan
 
-        else:
-            frame_elipse = fit_elipse(goodpoints[:,[0,1]])
-            radii1_[i] = frame_elipse[1]
-            radii2_[i] = frame_elipse[2]
-            centersx_[i] = frame_elipse[0][0]
-            centersy_[i] = frame_elipse[0][1]
+    xy_df = pupil_points_only_df.loc[:, pd.IndexSlice[:, :, ('x','y')]].values
+    # y_df = pupil_points_only_df.loc[:, pd.IndexSlice[:, :, 'y']].values
+    xy_arr = np.array(xy_df)
+    ellispe_estimates = np.array([iterate_fit_ellipse(r) for r in xy_arr])
+    radii1_, radii2_, centersx_, centersy_ = [array.flatten() for array in np.hsplit(ellispe_estimates,4)]
+    # xy_df = pd.concat([x_columns,y_columns],axis=1)
+
+    # bodypoints =  body_points.reshape((n_frames/8,8,3))
+    # for i,row in enumerate(bodypoints[:n_frames,:]):
+    #     reshaped = row[0:24].reshape([8,3])
+    #     goodpoints = reshaped[reshaped[:,2]>.3].astype(float)
+    #     if goodpoints.shape[0] < 3:
+    #         radii1_[i] = np.nan
+    #         radii2_[i] = np.nan
+    #         centersx_[i] = np.nan
+    #         centersy_[i] = np.nan
+    #
+    #     else:
+    #         frame_elipse = fit_elipse(goodpoints[:,[0,1]])
+    #         radii1_[i] = frame_elipse[1]
+    #         radii2_[i] = frame_elipse[2]
+    #         centersx_[i] = frame_elipse[0][0]
+    #         centersy_[i] = frame_elipse[0][1]
 
     eyeEW_arr = np.array((df[scorer, 'eyeW'] - df[scorer, 'eyeE'])[['x', 'y']])
     eyeLR_arr = np.array((df[scorer, 'edgeE'] - df[scorer, 'edgeW'])[['x', 'y']])
@@ -1416,3 +1435,88 @@ def unique_file_path(path, suffix='_a'):
         new_stem = f'{path.stem[:-1]}{chr(ord(path.stem[-1])+1)}'
         path = path.with_stem(new_stem)
     return path
+
+
+def peek(iterable):
+    try:
+        first = next(iterable)
+    except StopIteration:
+        return None
+    return True
+
+def get_condition_dict(dataclass,condition_keys,stages,pmetric2use='dlc_radii_a_zscored',
+                       do_baseline=True,extra_filts=()):
+    from pupil_analysis_func import batch_analysis
+
+    def get_mean_subtracted_traces(dataclass):
+        for key in ['p_rate_ctrl', 'alt_rand_ctrl']:
+            if key not in dataclass.aligned.keys():
+                continue
+            dataclass.aligned[f'{key}_sub'] = copy(dataclass.aligned[key])
+            for ti, tone_df in enumerate(dataclass.aligned[key][2]):
+                if (ti % 2 == 0 or ti == 0) and ti < len(dataclass.aligned[key][2]) - 1:
+                    print(ti)
+                    control_tone_df = dataclass.aligned[key][2][ti + 1].copy()
+                    for sess_idx in tone_df.index.droplevel('time').unique():
+                        sess_ctrl_mean = control_tone_df.loc[:, [sess_idx[0]], [sess_idx[1]]].mean(axis=0)
+                        tone_df.loc[:, sess_idx[0], sess_idx[1]] = tone_df.loc[:, [sess_idx[0]],
+                                                                   [sess_idx[1]]] - sess_ctrl_mean
+                    # run.aligned[f'{key}_sub'][2][ti] = copy(tone_df)-run.aligned[key][2][ti+1].mean(axis=0)
+                    dataclass.aligned[f'{key}_sub'][2][ti] = copy(tone_df)
+            for idx in [1, 2]:
+                if idx < (len(dataclass.aligned[key][2])):
+                    dataclass.aligned[f'{key}_sub'][2].pop(idx)
+
+    fam_filts = {
+        'p_rate': [[['plow'], ['p0.5'], ['phigh'], ['none']],
+                   ['0.1', '0.5', '0.9', 'control']],
+        'p_rate_ctrl': [[['plow'], ['plow', 'none'], ['p0.5'], ['p0.5', 'none'], ['phigh'], ['phigh', 'none']],
+                        ['0.1', '0.1 cntrl', '0.5', '0.5 cntrl', '0.9', '0.9 cntrl', 'control']],
+        'p_onset': [[['dearly', 'p0.5'], ['dlate', 'p0.5'], ['dmid', 'p0.5']],
+                    ['Early Pattern', 'Late Pattern', 'Middle Presentation']],
+        # 'p0.5_block': [[['0.5_0','p0.5'], ['0.5_1','p0.5'], ['0.5_2','p0.5'], ['none']],
+        #                ['0.5 Block (0.0)', '0.5 Block 1 (0.1)', '0.5 Block 2 (0.9)', 'Control']],
+        'alt_rand': [[['s0', 'p0.5'], ['s1', 'p0.5'], ['none', 'p0.5']],
+                     ['0.5 Random', '0.5 Alternating', 'Control']],
+        'alt_rand_ctrl': [[['s0', 'p0.5'], ['s0', 'none'], ['s1', 'p0.5'], ['s1', 'p0.5', 'none'], ['none', 'p0.5']],
+                          ['0.5 Random', '0.5 Random ctrl', '0.5 Alternating', '0.5 Alternating ctrl', 'Control']],
+        # 'ntones': [[['p0.5','tones4'],['p0.5','tones3'],['p0.5','tones2'],['p0.5','tones1']],['ABCD', 'ABC','AB','A']],
+        # 'pat_nonpatt': [[['e!0'],['e=0']],['Pattern Sequence Trials','No Pattern Sequence Trials']],
+        'pat_nonpatt_2X': [[['e!0'], ['none']], ['Pattern Sequence Trials', 'No Pattern Sequence Trials']],
+        'p_rate_fm': [[['plow'], ['pmed'], ['phigh'], ['ppost'], ['none']],
+                      ['0.1', '0.5', '0.9', '0.6', 'control']],
+
+    }
+
+    normdev_filts = {
+        'normdev': [[['d0'], ['d!0']], ['Normal', 'Deviant']],
+        'normdev_newnorms': [[['d0'], ['d!0'], ['d-1']], ['Normal', 'Deviant', 'New Normal']],
+        'pat_nonpatt_2X': [[['e!0'], ['none']], ['Pattern Sequence Trials', 'No Pattern Sequence Trials']],
+    }
+
+    all_filts = {**fam_filts, **normdev_filts}
+
+    align_pnts = ['ToneTime', 'Reward', 'Gap_Time']
+
+    if not hasattr(dataclass,'allinged'):
+        dataclass.aligned = {}
+
+    for cond_key in condition_keys:
+        cond_filts = all_filts.get(cond_key,None)
+        if cond_filts == None:
+            print(f'{cond_key} not in {all_filts.keys()}. Skipping')
+            continue
+        if cond_key in dataclass.aligned.keys():
+            print(f'{cond_key} exists. Skipping')
+            continue
+        if '2X' in cond_key:
+            cond_align_point = align_pnts[2]
+        else:
+            cond_align_point = align_pnts[0]
+        batch_analysis(dataclass, dataclass.aligned, stages, f'{cond_align_point}_dt', [[0, f'{cond_align_point}'], ],
+                       cond_filts[0], cond_filts[1], pmetric=pmetric2use,
+                       filter_df=True, plot=True, sep_cond_cntrl_flag=False, cond_name=cond_key,
+                       use4pupil=True, baseline=do_baseline, pdr=False, extra_filts=extra_filts)
+    get_mean_subtracted_traces(dataclass)
+
+    return all_filts

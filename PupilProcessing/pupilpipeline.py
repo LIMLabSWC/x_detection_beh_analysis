@@ -59,20 +59,13 @@ class Main:
         #         if 'Wait' not in col and 'dt' not in col and col.find('Harp') == -1 and col.find(
         #                 'Bonsai') == -1 and 'Lick' not in col:
         #             self.trial_data[f'{col}_scalar'] = [scalarTime(t) for t in self.trial_data[col]]
-        for col in self.trial_data.keys():
-            if col.find('Time') != -1 or col.find('Start') != -1 or col.find('End') != -1 :
-                if col.find('Wait') == -1 and col.find('dt') == -1 and col.find('Lick_Times') == -1 and col.find('Cross') ==-1:
-                    utils.add_datetimecol(self.trial_data, col)
+
         # format trial data df
         try:
             self.trial_data = self.trial_data.drop(columns=['RewardCross_Time','WhiteCross_Time'])
         except KeyError:
             pass
         # add datetime cols
-        for col in self.trial_data.keys():
-            if 'Time' in col or 'Start' in col or 'End' in col:
-                if 'Wait' not in col and 'dt' not in col and col.find('Harp') == -1 and col.find('Bonsai') == -1:
-                    utils.add_datetimecol(self.trial_data,col)
         # self.trial_data['Reaction_time'] = self.trial_data['Trial_End_dt']-(self.trial_data['Trial_Start_dt'] +
         #                                                                     self.trial_data['Stim1_Duration'])
         self.animals = names
@@ -102,7 +95,7 @@ class Main:
         self.redo=redo
         self.protocol = protocol
         self.use_ttl = use_ttl
-
+        logger.debug(dirstyle)
         year_lim = datetime.strptime(daterange[0],'%y%m%d').year
         if self.subjecttype == 'mouse':
             if dirstyle == 'N_D_it':
@@ -147,7 +140,7 @@ class Main:
         outs_arr = np.array(outliers_list)
         return outs_arr.any(axis=0).astype(int),outs_arr[-1,:],outs_arr
 
-    @logger.catch
+    # @logger.catch
     def process_pupil(self,pclass,name,pdf,pdf_colname,filt_params=None):
 
         if filt_params == None:
@@ -231,12 +224,17 @@ class Main:
             for date in np.unique(self.dates):
                 if date not in self.trial_data.loc[animal].index.get_level_values('Date'):
                     continue
-                session_TD = self.trial_data.loc[animal, date].copy()
+                session_TD = self.trial_data.loc[animal, date].copy().dropna(axis=1)
                 if 'RewardProb' in session_TD.columns and 'prob' not in self.protocol:
                     if session_TD['RewardProb'].sum() > 0:
                         continue
                     if session_TD['Stage'][-1]< 3:
                         continue
+                for col in session_TD:
+                    if 'Time' in col or 'Start' in col or 'End' in col:
+                        if 'Wait' not in col and 'dt' not in col and col.find('Harp') == -1 and col.find(
+                                'Bonsai') == -1 and 'Times' not in col and 'Offset' not in col:
+                            utils.add_datetimecol(session_TD, col)
                 if 'Time_dt' in session_TD.columns:
                     session_TD.set_index('Time_dt', append=True, inplace=True)
                 else:
@@ -283,7 +281,7 @@ class Main:
                             if isinstance(sess_recdir,str):
                                 sess_recdir = [sess_recdir]
                             event92_files = sorted((self.pdir/'harpbins').glob(f'{animal}_HitData_{date}*_event_data_92.csv'))
-                            if len(event92_files) > 0 and self.use_ttl:  # code to realign pupil frames and ttls in case of crash
+                            if len(list(event92_files)) > 0 and self.use_ttl:  # code to realign pupil frames and ttls in case of crash
                                 event92_df_list = [pd.read_csv(event_file) for event_file in event92_files]
                             else:
                                 event92_df_list = None
@@ -292,10 +290,10 @@ class Main:
                                 # check files
                                 if not Path(sess_recdir[0],f'{name}_eye0_timestamps.csv').is_file():
                                     continue
-                                recs_list = [pd.read_csv(Path(rec,f'{name}_eye0_timestamps.csv')).iloc[:-1,:]
+                                recs_list = [pd.read_csv(Path(rec,f'{name}_eye0_timestamps.csv'))
                                              for rec in list(sess_recdir)]
                                 # recs = pd.concat(recs_list,axis=0)
-                                if len(event92_files) > 0 and self.use_ttl:
+                                if len(list(event92_files)) > 0 and self.use_ttl:
                                     list_match_ttl_pupil = []
                                     try:
                                         for event_df, rec_df in zip(event92_df_list,recs_list):
@@ -320,21 +318,40 @@ class Main:
                                     rec['Timestamp_adj'] = rec['Timestamp']-rec['Timestamp'][0].copy()
                                     animal_pupil['frametime'] = rec['Timestamp_adj'].apply(lambda e:
                                                                                            bonsai0+timedelta(seconds=float(e)/1e9))
-                                    if len(event92_files) > 0 and self.use_ttl:  #  change back to >0
+                                    if len(list(event92_files)) > 0 and self.use_ttl:  #  change back to >0
                                         event92_df = event92_df_list[ri]
                                         cam_ttls = event92_df['Timestamp']
                                         cam_ttls_dt = np.full_like(cam_ttls, np.nan, dtype=object)
-                                        for ei, e in enumerate(cam_ttls.values):
-                                            harp_dis_min = (session_TD['Harp_time'] - e).abs().idxmin()
-                                            try:cam_ttls_dt[ei] = (session_TD['Bonsai_time_dt'][harp_dis_min] - timedelta(
-                                                hours=float(session_TD['Offset'][harp_dis_min]))
-                                                               + timedelta(seconds=e - session_TD['Harp_time'][harp_dis_min]))
-                                            except KeyError: logger.debug(session_TD.columns)
-                                            except TypeError: logger.warning('float error')
-                                        # ttls2removed = remove_missed_ttls(animal_pupil.index.to_numpy())
-                                        try:animal_pupil['frametime'] = cam_ttls_dt[-animal_pupil.shape[0]:]
-                                        except:
-                                            logger.warning(f'ttl times not used for: {name}')
+                                        ttl_harp_times = np.array(cam_ttls.values)
+                                        mega_matrix = np.abs(np.array(np.matrix(session_TD['Harp_time'])).T-ttl_harp_times)
+                                        mega_matrix_mins_idx = np.argmin(mega_matrix, axis=0)
+                                        matrix_bonsai_times = np.array(session_TD['Bonsai_time_dt'][mega_matrix_mins_idx]
+                                                                       ,dtype='datetime64[us]')
+                                        matrix_offset_times = np.array(session_TD['Offset'][mega_matrix_mins_idx],dtype=float)
+                                        matrix_harp_times = np.array(session_TD['Harp_time'][mega_matrix_mins_idx]
+                                                                       ,dtype='datetime64[us]')
+                                        matrix_d_harp_times = ttl_harp_times - \
+                                                              session_TD['Harp_time'][mega_matrix_mins_idx]
+                                        tdelta_arr = np.array((matrix_d_harp_times*1e6).astype(int) +
+                                                              (matrix_offset_times*3600*1e6).astype(int),
+                                                              dtype='timedelta64[us]')
+                                        ttl_bonsai_time = matrix_bonsai_times + tdelta_arr
+                                        # animal_pupil = pd.DataFrame(ttl_bonsai_time,columns=['frametime'])
+                                        # animal_pupil.index=animal_pupil['frametime']
+                                        try: animal_pupil['frametime'] = ttl_bonsai_time[:animal_pupil.shape[0]]
+                                        except: logger.warning(f'ttl times not used for: {name}')
+
+                                        # for ei, e in enumerate(cam_ttls.values):
+                                        #     harp_dis_min = (session_TD['Harp_time'] - e).abs().idxmin()
+                                        #     try:cam_ttls_dt[ei] = (session_TD['Bonsai_time_dt'][harp_dis_min] - timedelta(
+                                        #         hours=float(session_TD['Offset'][harp_dis_min]))
+                                        #                        + timedelta(seconds=e - session_TD['Harp_time'][harp_dis_min]))
+                                        #     except KeyError: logger.debug(session_TD.columns)
+                                        #     except TypeError: logger.warning('float error')
+                                        # # ttls2removed = remove_missed_ttls(animal_pupil.index.to_numpy())
+                                        # try:animal_pupil['frametime'] = cam_ttls_dt[-animal_pupil.shape[0]:]
+                                        # except:
+                                        #     logger.warning(f'ttl times not used for: {name}')
                                 animal_pupil_dfs.append(animal_pupil.copy())
 
                         if self.subjecttype in ['mouse','human']:
@@ -350,22 +367,25 @@ class Main:
                             for rec_ix, rec in enumerate(sess_recdir):
                                 dlc_estimates_files = []
                                 if self.dlc_filtflag:
-                                    dlc_estimates_files = Path(rec).glob(f'{non_plabs_str}'
+                                    dlc_estimates_files_gen = Path(rec).glob(f'{non_plabs_str}'
                                                                          f'eye0DLC_resnet50_mice_pupilJul4shuffle1_'
                                                                          f'*_filtered.h5')
+                                    dlc_estimates_files = list(dlc_estimates_files_gen)
                                 if not len(dlc_estimates_files):
-                                    dlc_estimates_files = Path(rec).glob(f'{non_plabs_str}'
+                                    dlc_estimates_files_gen = Path(rec).glob(f'{non_plabs_str}'
                                                                          f'eye0DLC_resnet50_mice_pupilJul4shuffle1_'
                                                                          f'*.h5')
-                                if len(dlc_estimates_files):
-                                    dlc_snapshot_nos = [int(str(estimate_file).replace('_filtered','').split('_')[-1].split('.')[0])
-                                                        for estimate_file in dlc_estimates_files]
+                                    dlc_estimates_files = list(dlc_estimates_files_gen)
+                                # dlc_estimates_files = list(dlc_estimates_files_gen)
+                                dlc_snapshot_nos = [int(str(estimate_file).replace('_filtered','').split('_')[-1].split('.')[0])
+                                                    for estimate_file in dlc_estimates_files]
+                                if not len(dlc_estimates_files):
+                                    logger.warning(f'missing dlc for {name}')
+                                    continue
+                                else:
                                     snapshot2use_idx = np.argmax(dlc_snapshot_nos)
                                     dlc_pathfile = dlc_estimates_files[snapshot2use_idx]
                                     scorer = f'DLC_resnet50_mice_pupilJul4shuffle1_{dlc_snapshot_nos[snapshot2use_idx]}'
-                                else:
-                                    logger.warning(f'missing dlc for {name}')
-                                    continue
                                 if dlc_pathfile is not None:
                                     try:
                                         _dlc_df = pd.read_hdf(dlc_pathfile)
@@ -375,7 +395,7 @@ class Main:
                                             _dlc_list.append(_dlc_df.head(animal_pupil_dfs[0].shape[0]))
 
                                     except pd.errors.ParserError:
-                                        print(dlc_pathfile.upper())
+                                        print(str(dlc_pathfile).upper())
                                     except IndexError: continue
 
                             if len(_dlc_list) == 0:
@@ -447,8 +467,8 @@ class Main:
                         else:
                             break
                         outs_list = []
-                        cols2process = ['dlc_area','dlc_radii_a','dlc_radii_b','dlc_radii_ab','dlc_EW','dlc_LR']
-                        if plabs:
+                        cols2process = ['dlc_radii_a','dlc_radii_b','dlc_radii_ab','dlc_EW','dlc_LR']
+                        if 'diameter_2d' in animal_pupil_subset.columns:
                             cols2process = cols2process+['rawarea',diam_col,]
                         for col2norm in cols2process:
                             pupil_processed = copy(self.process_pupil(pupilclass,f'{name}_{date}',
