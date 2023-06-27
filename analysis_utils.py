@@ -20,7 +20,7 @@ import glob
 import scipy.stats
 import pathlib
 from pathlib import Path
-import cupy as cp
+# import cupy as cp
 from joblib import Parallel, delayed
 import pickle
 import itertools
@@ -888,10 +888,6 @@ def plot_eventaligned(eventdata_list, eventnames, dur, beh, plotax=None, pltsize
 
 def plotvar(data,plot,timeseries=None,col_str=None,n_samples=500):
 
-    # ci95 = 1*np.std(data,axis=0)/np.sqrt(data.shape[0])
-    # print(ci95.shape)
-    # plot[1].fill_between(timeseries, np.nanmean(data,axis=0)+ci95,np.nanmean(data, axis=0)-ci95,alpha=0.1)
-    # try:
     rand_npdample = [data.to_numpy()[np.random.choice(data.shape[0], data.shape[0], replace=True), :].mean(axis=0)
                      for i in range(n_samples)]
     # except: pass
@@ -962,19 +958,27 @@ def plotvar(data,plot,timeseries=None,col_str=None,n_samples=500):
 #     return sig_time_points
 
 def ts_permutation_test(ts_matrices, n_permutations, conf_interval, cnt_idx=0, pltax=(None, None), ts_window=None, n_jobs=1):
-    observed_diff = cp.abs(cp.asarray(ts_matrices[cnt_idx]).mean(axis=0) - cp.asarray(ts_matrices[cnt_idx]).mean(axis=0))
-    epochs_per_matrix = [matrix.shape[0] for matrix in ts_matrices]
 
+
+    # def calculate_permutation(cond_idx):
+    #     cond_matrix = cp.asarray(ts_matrices[cond_idx])
+    #     perm_diff = cp.zeros(ts_matrices[cnt_idx].shape[1])
+    #     rng = cp.random.default_rng()
+    #     for shuffle_i in range(n_permutations):
+    #         shuffled_indices = rng.choice(cond_matrix.shape[0], cond_matrix.shape[0], replace=False)
+    #         shuffled_cond_matrix = cond_matrix[shuffled_indices]
+    #         perm_diff += cp.abs(shuffled_cond_matrix.mean(axis=0) - cp.asarray(ts_matrices[cnt_idx]).mean(axis=0))
+    #     return perm_diff
+    #
     def calculate_permutation(cond_idx):
-        cond_matrix = cp.asarray(ts_matrices[cond_idx])
-        perm_diff = cp.zeros(ts_matrices[cnt_idx].shape[1])
-        rng = cp.random.default_rng()
+        cond_matrix = np.asarray(ts_matrices[cond_idx])
+        perm_diff = np.zeros(ts_matrices[cnt_idx].shape[1])
+        rng = np.random.default_rng()
         for shuffle_i in range(n_permutations):
             shuffled_indices = rng.choice(cond_matrix.shape[0], cond_matrix.shape[0], replace=False)
             shuffled_cond_matrix = cond_matrix[shuffled_indices]
-            perm_diff += cp.abs(shuffled_cond_matrix.mean(axis=0) - cp.asarray(ts_matrices[cnt_idx]).mean(axis=0))
+            perm_diff += np.abs(shuffled_cond_matrix.mean(axis=0) - np.asarray(ts_matrices[cnt_idx]).mean(axis=0))
         return perm_diff
-
     parallel_results = Parallel(n_jobs=n_jobs)(
         delayed(calculate_permutation)(cond_idx) for cond_idx in range(len(ts_matrices))
     )
@@ -982,18 +986,18 @@ def ts_permutation_test(ts_matrices, n_permutations, conf_interval, cnt_idx=0, p
     sig_time_points = np.zeros((len(ts_matrices), ts_matrices[cnt_idx].shape[1]), dtype=bool)
     for cond_idx, perm_diff in enumerate(parallel_results):
         perm_diff /= n_permutations
-        sig_time_points[cond_idx] = cp.asnumpy(perm_diff < ((1 - conf_interval) / 2))
+        sig_time_points[cond_idx] = perm_diff > ((1 - conf_interval) / 2)
 
-        if pltax is not None and ts_window is not None:
-            plt_ts = np.linspace(ts_window[0], ts_window[1], sig_time_points.shape[1])
-            ylim0 = pltax[1].get_ylim()[0]
-            trace_is = list(range(len(ts_matrices)))
-            trace_is.pop(cnt_idx)
-            print(trace_is)
-            for cond_i, cond_ts in enumerate(sig_time_points[trace_is]):
-                sig_x_series = plt_ts[np.where(cond_ts == True)]
-                sig_y_series = np.full_like(sig_x_series, ylim0 * (1 + 0.1 * cond_i))
-                pltax[1].scatter(sig_x_series, sig_y_series, marker='o', c=f'C{trace_is[cond_i]}', s=2)
+    if pltax is not None and ts_window is not None:
+        plt_ts = np.linspace(ts_window[0], ts_window[1], sig_time_points.shape[1])
+        ylim0 = pltax[1].get_ylim()[0]
+        trace_is = list(range(len(ts_matrices)))
+        trace_is.pop(cnt_idx)
+        print(trace_is)
+        for cond_i, cond_ts in enumerate(sig_time_points[trace_is]):
+            sig_x_series = plt_ts[np.where(cond_ts == True)]
+            sig_y_series = np.full_like(sig_x_series, ylim0 * (1 + 0.1 * cond_i))
+            pltax[1].scatter(sig_x_series, sig_y_series, marker='o', c=f'C{trace_is[cond_i]}', s=2)
 
     return sig_time_points
 
@@ -1482,79 +1486,81 @@ def peek(iterable):
         return None
     return True
 
-def get_condition_dict(dataclass,condition_keys,stages,pmetric2use='dlc_radii_a_zscored',
-                       do_baseline=True,extra_filts=()):
-    from pupil_analysis_func import batch_analysis
+class PupilEventConditions:
 
-    def get_mean_subtracted_traces(dataclass):
-        for key in ['p_rate_ctrl', 'alt_rand_ctrl']:
-            if key not in dataclass.aligned.keys():
+    def __init__(self):
+        fam_filts = {
+            'p_rate': [[['plow'], ['p0.5'], ['phigh'], ['none']],
+                       ['0.1', '0.5', '0.9', 'control']],
+            'p_rate_ctrl': [[['plow'], ['plow', 'none'], ['p0.5'], ['p0.5', 'none'], ['phigh'], ['phigh', 'none']],
+                            ['0.1', '0.1 cntrl', '0.5', '0.5 cntrl', '0.9', '0.9 cntrl', 'control']],
+            'p_onset': [[['dearly', 'p0.5'], ['dlate', 'p0.5'], ['dmid', 'p0.5']],
+                        ['Early Pattern', 'Late Pattern', 'Middle Presentation']],
+            # 'p0.5_block': [[['0.5_0','p0.5'], ['0.5_1','p0.5'], ['0.5_2','p0.5'], ['none']],
+            #                ['0.5 Block (0.0)', '0.5 Block 1 (0.1)', '0.5 Block 2 (0.9)', 'Control']],
+            'alt_rand': [[['s0', 'p0.5'], ['s1', 'p0.5'], ['none', 'p0.5']],
+                         ['0.5 Random', '0.5 Alternating', 'Control']],
+            'alt_rand_ctrl': [
+                [['s0', 'p0.5'], ['s0', 'none'], ['s1', 'p0.5'], ['s1', 'p0.5', 'none'], ['none', 'p0.5']],
+                ['0.5 Random', '0.5 Random ctrl', '0.5 Alternating', '0.5 Alternating ctrl', 'Control']],
+            # 'ntones': [[['p0.5','tones4'],['p0.5','tones3'],['p0.5','tones2'],['p0.5','tones1']],['ABCD', 'ABC','AB','A']],
+            # 'pat_nonpatt': [[['e!0'],['e=0']],['Pattern Sequence Trials','No Pattern Sequence Trials']],
+            'pat_nonpatt_2X': [[['e!0'], ['none']], ['Pattern Sequence Trials', 'No Pattern Sequence Trials']],
+            'p_rate_fm': [[['plow'], ['pmed'], ['phigh'], ['ppost'], ['none']],
+                          ['0.1', '0.5', '0.9', '0.6', 'control']],
+
+        }
+
+        normdev_filts = {
+            'normdev': [[['d0'], ['d!0']], ['Normal', 'Deviant']],
+            'normdev_newnorms': [[['d0'], ['d!0'], ['d-1']], ['Normal', 'Deviant', 'New Normal']],
+            'pat_nonpatt_2X': [[['e!0'], ['none']], ['Pattern Sequence Trials', 'No Pattern Sequence Trials']],
+        }
+        self.all_filts = {**fam_filts, **normdev_filts}
+
+    def get_condition_dict(self,dataclass,condition_keys,stages,pmetric2use='dlc_radii_a_zscored',
+                           do_baseline=True,extra_filts=()):
+        from pupil_analysis_func import batch_analysis
+
+        def get_mean_subtracted_traces(dataclass):
+            for key in ['p_rate_ctrl', 'alt_rand_ctrl']:
+                if key not in dataclass.aligned.keys():
+                    continue
+                dataclass.aligned[f'{key}_sub'] = copy(dataclass.aligned[key])
+                for ti, tone_df in enumerate(dataclass.aligned[key][2]):
+                    if (ti % 2 == 0 or ti == 0) and ti < len(dataclass.aligned[key][2]) - 1:
+                        print(ti)
+                        control_tone_df = dataclass.aligned[key][2][ti + 1].copy()
+                        for sess_idx in tone_df.index.droplevel('time').unique():
+                            sess_ctrl_mean = control_tone_df.loc[:, [sess_idx[0]], [sess_idx[1]]].mean(axis=0)
+                            tone_df.loc[:, sess_idx[0], sess_idx[1]] = tone_df.loc[:, [sess_idx[0]],
+                                                                       [sess_idx[1]]] - sess_ctrl_mean
+                        # run.aligned[f'{key}_sub'][2][ti] = copy(tone_df)-run.aligned[key][2][ti+1].mean(axis=0)
+                        dataclass.aligned[f'{key}_sub'][2][ti] = copy(tone_df)
+                for idx in [1, 2]:
+                    if idx < (len(dataclass.aligned[key][2])):
+                        dataclass.aligned[f'{key}_sub'][2].pop(idx)
+
+
+        align_pnts = ['ToneTime', 'Reward', 'Gap_Time']
+
+        if not hasattr(dataclass,'allinged'):
+            dataclass.aligned = {}
+
+        for cond_key in condition_keys:
+            cond_filts = self.all_filts.get(cond_key,None)
+            if cond_filts == None:
+                print(f'{cond_key} not in {self.all_filts.keys()}. Skipping')
                 continue
-            dataclass.aligned[f'{key}_sub'] = copy(dataclass.aligned[key])
-            for ti, tone_df in enumerate(dataclass.aligned[key][2]):
-                if (ti % 2 == 0 or ti == 0) and ti < len(dataclass.aligned[key][2]) - 1:
-                    print(ti)
-                    control_tone_df = dataclass.aligned[key][2][ti + 1].copy()
-                    for sess_idx in tone_df.index.droplevel('time').unique():
-                        sess_ctrl_mean = control_tone_df.loc[:, [sess_idx[0]], [sess_idx[1]]].mean(axis=0)
-                        tone_df.loc[:, sess_idx[0], sess_idx[1]] = tone_df.loc[:, [sess_idx[0]],
-                                                                   [sess_idx[1]]] - sess_ctrl_mean
-                    # run.aligned[f'{key}_sub'][2][ti] = copy(tone_df)-run.aligned[key][2][ti+1].mean(axis=0)
-                    dataclass.aligned[f'{key}_sub'][2][ti] = copy(tone_df)
-            for idx in [1, 2]:
-                if idx < (len(dataclass.aligned[key][2])):
-                    dataclass.aligned[f'{key}_sub'][2].pop(idx)
-
-    fam_filts = {
-        'p_rate': [[['plow'], ['p0.5'], ['phigh'], ['none']],
-                   ['0.1', '0.5', '0.9', 'control']],
-        'p_rate_ctrl': [[['plow'], ['plow', 'none'], ['p0.5'], ['p0.5', 'none'], ['phigh'], ['phigh', 'none']],
-                        ['0.1', '0.1 cntrl', '0.5', '0.5 cntrl', '0.9', '0.9 cntrl', 'control']],
-        'p_onset': [[['dearly', 'p0.5'], ['dlate', 'p0.5'], ['dmid', 'p0.5']],
-                    ['Early Pattern', 'Late Pattern', 'Middle Presentation']],
-        # 'p0.5_block': [[['0.5_0','p0.5'], ['0.5_1','p0.5'], ['0.5_2','p0.5'], ['none']],
-        #                ['0.5 Block (0.0)', '0.5 Block 1 (0.1)', '0.5 Block 2 (0.9)', 'Control']],
-        'alt_rand': [[['s0', 'p0.5'], ['s1', 'p0.5'], ['none', 'p0.5']],
-                     ['0.5 Random', '0.5 Alternating', 'Control']],
-        'alt_rand_ctrl': [[['s0', 'p0.5'], ['s0', 'none'], ['s1', 'p0.5'], ['s1', 'p0.5', 'none'], ['none', 'p0.5']],
-                          ['0.5 Random', '0.5 Random ctrl', '0.5 Alternating', '0.5 Alternating ctrl', 'Control']],
-        # 'ntones': [[['p0.5','tones4'],['p0.5','tones3'],['p0.5','tones2'],['p0.5','tones1']],['ABCD', 'ABC','AB','A']],
-        # 'pat_nonpatt': [[['e!0'],['e=0']],['Pattern Sequence Trials','No Pattern Sequence Trials']],
-        'pat_nonpatt_2X': [[['e!0'], ['none']], ['Pattern Sequence Trials', 'No Pattern Sequence Trials']],
-        'p_rate_fm': [[['plow'], ['pmed'], ['phigh'], ['ppost'], ['none']],
-                      ['0.1', '0.5', '0.9', '0.6', 'control']],
-
-    }
-
-    normdev_filts = {
-        'normdev': [[['d0'], ['d!0']], ['Normal', 'Deviant']],
-        'normdev_newnorms': [[['d0'], ['d!0'], ['d-1']], ['Normal', 'Deviant', 'New Normal']],
-        'pat_nonpatt_2X': [[['e!0'], ['none']], ['Pattern Sequence Trials', 'No Pattern Sequence Trials']],
-    }
-
-    all_filts = {**fam_filts, **normdev_filts}
-
-    align_pnts = ['ToneTime', 'Reward', 'Gap_Time']
-
-    if not hasattr(dataclass,'allinged'):
-        dataclass.aligned = {}
-
-    for cond_key in condition_keys:
-        cond_filts = all_filts.get(cond_key,None)
-        if cond_filts == None:
-            print(f'{cond_key} not in {all_filts.keys()}. Skipping')
-            continue
-        if cond_key in dataclass.aligned.keys():
-            print(f'{cond_key} exists. Skipping')
-            continue
-        if '2X' in cond_key:
-            cond_align_point = align_pnts[2]
-        else:
-            cond_align_point = align_pnts[0]
-        batch_analysis(dataclass, dataclass.aligned, stages, f'{cond_align_point}_dt', [[0, f'{cond_align_point}'], ],
-                       cond_filts[0], cond_filts[1], pmetric=pmetric2use,
-                       filter_df=True, plot=True, sep_cond_cntrl_flag=False, cond_name=cond_key,
-                       use4pupil=True, baseline=do_baseline, pdr=False, extra_filts=extra_filts)
-    get_mean_subtracted_traces(dataclass)
-
-    return all_filts
+            if cond_key in dataclass.aligned.keys():
+                print(f'{cond_key} exists. Skipping')
+                continue
+            if '2X' in cond_key:
+                cond_align_point = align_pnts[2]
+            else:
+                cond_align_point = align_pnts[0]
+            batch_analysis(dataclass, dataclass.aligned, stages, f'{cond_align_point}_dt', [[0, f'{cond_align_point}'], ],
+                           cond_filts[0], cond_filts[1], pmetric=pmetric2use,
+                           filter_df=True, plot=True, sep_cond_cntrl_flag=False, cond_name=cond_key,
+                           use4pupil=True, baseline=do_baseline, pdr=False, extra_filts=extra_filts)
+        get_mean_subtracted_traces(dataclass)
