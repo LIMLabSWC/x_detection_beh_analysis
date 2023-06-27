@@ -20,6 +20,8 @@ import glob
 import scipy.stats
 import pathlib
 from pathlib import Path
+import cupy as cp
+from joblib import Parallel, delayed
 import pickle
 import itertools
 # import jax
@@ -903,59 +905,95 @@ def plotvar(data,plot,timeseries=None,col_str=None,n_samples=500):
         plot[1].fill_between(data.columns, ci[1, :], ci[2, :], alpha=0.1)
 
 
-def ts_permutation_test(ts_matrices, n_permutations, conf_interval,cnt_idx=0,  pltax=(None,None),ts_window=None,):
-    """
+# def ts_permutation_test(ts_matrices, n_permutations, conf_interval,cnt_idx=0,  pltax=(None,None),ts_window=None,):
+#     """
+#
+#     :param ts_matrices: list of ts data where cols are times points and rows are epochs
+#     :param n_permutations:
+#     :param conf_interval:
+#     :return:
+#     """
+#     t0 = time.time()
+#     observed_diff = [np.abs(matrix.mean(axis=0) - ts_matrices[cnt_idx].mean(axis=0)) for matrix in ts_matrices]
+#     print(f'perm subtract time ={time.time()-t0}')
+#     # observed_diff.pop(cnt_idx)
+#     epochs_per_matrix = [matrix.shape[0] for matrix in ts_matrices]
+#     epochs_start_ix = np.pad(np.cumsum(epochs_per_matrix),[1,0])
+#     # mega_matrix = np.vstack(ts_matrices).copy()
+#
+#     rng = np.random.default_rng()
+#     # simulated_diffs = np.zeros((n_permutations,len(ts_matrices),ts_matrices[cnt_idx].shape[1]))
+#     t0 = time.time()
+#     for cond_idx, cond_matrix in enumerate(ts_matrices):
+#         mega_matrix = np.vstack([cond_matrix,ts_matrices[cnt_idx]]).copy()
+#         shuffled_indices = [np.random.choice(mega_matrix.shape[0], mega_matrix.shape[0], replace=False) for n in
+#                             range(n_permutations)]
+#         shuffled_timeseries_data = [mega_matrix[idxs, :] for idxs in shuffled_indices]
+#         simulated_diffs = np.array([shuffled[:cond_matrix.shape[0]].mean(axis=0) -
+#                                     shuffled[cond_matrix.shape[0]:].mean(axis=0)
+#                                     for shuffled in shuffled_timeseries_data])
+#         shuffled_subsets = []
+#         # for shuffle_i in range(n_permutations):
+#         #     mega_matrix_shuffled = rng.permutation(mega_matrix,axis=0)
+#         #     simulated_diffs[shuffle_i,cond_idx,:] = mega_matrix_shuffled[:cond_matrix.shape[0]].mean(axis=0) - \
+#         #                                             mega_matrix_shuffled[cond_matrix.shape[0]:].mean(axis=0)
+#             # shuffled_subsets.append(mega_matrix_shuffled.mean(axis=0))
+#
+#         # _sim_diffs = [np.abs(matrix - shuffled_subsets[cnt_idx]) for matrix in shuffled_subsets]
+#         # if cond_idx is not cnt_idx:
+#         #     simulated_diffs[:,cond_idx,:] = _sim_diffs
+#     # simulated_diffs = np.delete(simulated_diffs,cnt_idx,axis=1)
+#     print(f'shuffle time = {time.time()-t0}')
+#     simulated_greater_observed = np.greater(simulated_diffs,observed_diff)
+#     portion_above_observed = simulated_greater_observed.mean(axis=0)
+#     sig_time_points = portion_above_observed < ((1 - conf_interval)/2)
+#
+#     if pltax is not None and ts_window is not None:
+#         plt_ts = np.linspace(ts_window[0],ts_window[1],sig_time_points.shape[1])
+#         ylim0 = pltax[1].get_ylim()[0]
+#         trace_is = list(range(len(ts_matrices)))
+#         trace_is.pop(cnt_idx)
+#         print(trace_is)
+#         for cond_i, cond_ts in enumerate(sig_time_points[trace_is]):
+#             sig_x_series = plt_ts[np.where(cond_ts==True)]
+#             sig_y_series = np.full_like(sig_x_series,ylim0*(1+0.1*cond_i))
+#             pltax[1].scatter(sig_x_series,sig_y_series, marker='o', c=f'C{trace_is[cond_i]}', s=2)
+#
+#     return sig_time_points
 
-    :param ts_matrices: list of ts data where cols are times points and rows are epochs
-    :param n_permutations:
-    :param conf_interval:
-    :return:
-    """
-    t0 = time.time()
-    observed_diff = [np.abs(matrix.mean(axis=0) - ts_matrices[cnt_idx].mean(axis=0)) for matrix in ts_matrices]
-    print(f'perm subtract time ={time.time()-t0}')
-    # observed_diff.pop(cnt_idx)
+def ts_permutation_test(ts_matrices, n_permutations, conf_interval, cnt_idx=0, pltax=(None, None), ts_window=None, n_jobs=1):
+    observed_diff = cp.abs(cp.asarray(ts_matrices[cnt_idx]).mean(axis=0) - cp.asarray(ts_matrices[cnt_idx]).mean(axis=0))
     epochs_per_matrix = [matrix.shape[0] for matrix in ts_matrices]
-    epochs_start_ix = np.pad(np.cumsum(epochs_per_matrix),[1,0])
-    # mega_matrix = np.vstack(ts_matrices).copy()
 
-    rng = np.random.default_rng()
-    # simulated_diffs = np.zeros((n_permutations,len(ts_matrices),ts_matrices[cnt_idx].shape[1]))
-    t0 = time.time()
-    for cond_idx, cond_matrix in enumerate(ts_matrices):
-        mega_matrix = np.vstack([cond_matrix,ts_matrices[cnt_idx]]).copy()
-        shuffled_indices = [np.random.choice(mega_matrix.shape[0], mega_matrix.shape[0], replace=False) for n in
-                            range(n_permutations)]
-        shuffled_timeseries_data = [mega_matrix[idxs, :] for idxs in shuffled_indices]
-        simulated_diffs = np.array([shuffled[:cond_matrix.shape[0]].mean(axis=0) -
-                                    shuffled[cond_matrix.shape[0]:].mean(axis=0)
-                                    for shuffled in shuffled_timeseries_data])
-        shuffled_subsets = []
-        # for shuffle_i in range(n_permutations):
-        #     mega_matrix_shuffled = rng.permutation(mega_matrix,axis=0)
-        #     simulated_diffs[shuffle_i,cond_idx,:] = mega_matrix_shuffled[:cond_matrix.shape[0]].mean(axis=0) - \
-        #                                             mega_matrix_shuffled[cond_matrix.shape[0]:].mean(axis=0)
-            # shuffled_subsets.append(mega_matrix_shuffled.mean(axis=0))
+    def calculate_permutation(cond_idx):
+        cond_matrix = cp.asarray(ts_matrices[cond_idx])
+        perm_diff = cp.zeros(ts_matrices[cnt_idx].shape[1])
+        rng = cp.random.default_rng()
+        for shuffle_i in range(n_permutations):
+            shuffled_indices = rng.choice(cond_matrix.shape[0], cond_matrix.shape[0], replace=False)
+            shuffled_cond_matrix = cond_matrix[shuffled_indices]
+            perm_diff += cp.abs(shuffled_cond_matrix.mean(axis=0) - cp.asarray(ts_matrices[cnt_idx]).mean(axis=0))
+        return perm_diff
 
-        # _sim_diffs = [np.abs(matrix - shuffled_subsets[cnt_idx]) for matrix in shuffled_subsets]
-        # if cond_idx is not cnt_idx:
-        #     simulated_diffs[:,cond_idx,:] = _sim_diffs
-    # simulated_diffs = np.delete(simulated_diffs,cnt_idx,axis=1)
-    print(f'shuffle time = {time.time()-t0}')
-    simulated_greater_observed = np.greater(simulated_diffs,observed_diff)
-    portion_above_observed = simulated_greater_observed.mean(axis=0)
-    sig_time_points = portion_above_observed < ((1 - conf_interval)/2)
+    parallel_results = Parallel(n_jobs=n_jobs)(
+        delayed(calculate_permutation)(cond_idx) for cond_idx in range(len(ts_matrices))
+    )
 
-    if pltax is not None and ts_window is not None:
-        plt_ts = np.linspace(ts_window[0],ts_window[1],sig_time_points.shape[1])
-        ylim0 = pltax[1].get_ylim()[0]
-        trace_is = list(range(len(ts_matrices)))
-        trace_is.pop(cnt_idx)
-        print(trace_is)
-        for cond_i, cond_ts in enumerate(sig_time_points[trace_is]):
-            sig_x_series = plt_ts[np.where(cond_ts==True)]
-            sig_y_series = np.full_like(sig_x_series,ylim0*(1+0.1*cond_i))
-            pltax[1].scatter(sig_x_series,sig_y_series, marker='o', c=f'C{trace_is[cond_i]}', s=2)
+    sig_time_points = np.zeros((len(ts_matrices), ts_matrices[cnt_idx].shape[1]), dtype=bool)
+    for cond_idx, perm_diff in enumerate(parallel_results):
+        perm_diff /= n_permutations
+        sig_time_points[cond_idx] = cp.asnumpy(perm_diff < ((1 - conf_interval) / 2))
+
+        if pltax is not None and ts_window is not None:
+            plt_ts = np.linspace(ts_window[0], ts_window[1], sig_time_points.shape[1])
+            ylim0 = pltax[1].get_ylim()[0]
+            trace_is = list(range(len(ts_matrices)))
+            trace_is.pop(cnt_idx)
+            print(trace_is)
+            for cond_i, cond_ts in enumerate(sig_time_points[trace_is]):
+                sig_x_series = plt_ts[np.where(cond_ts == True)]
+                sig_y_series = np.full_like(sig_x_series, ylim0 * (1 + 0.1 * cond_i))
+                pltax[1].scatter(sig_x_series, sig_y_series, marker='o', c=f'C{trace_is[cond_i]}', s=2)
 
     return sig_time_points
 
