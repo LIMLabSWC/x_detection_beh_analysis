@@ -1002,6 +1002,29 @@ def ts_permutation_test(ts_matrices, n_permutations, conf_interval, cnt_idx=0, p
     return sig_time_points
 
 
+def ts_two_tailed_ht(ts_matrices, conf_interval, cnt_idx=0, pltax=(None, None), ts_window=None,):
+    def two_tailed_ht(sample1, sample2, ci=conf_interval):
+        t_stat, p_val = scipy.stats.ttest_ind(sample1,sample2, equal_var=False)
+        return p_val
+
+    pval_ts_matrix = np.zeros((len(ts_matrices)-1, ts_matrices.shape[1]))
+    for ti, ts_matrix in enumerate(ts_matrices):
+        if ti != cnt_idx:
+            pval_ts = [two_tailed_ht(time_point_sample1, time_point_sample2, conf_interval)
+                       for time_point_sample1, time_point_sample2 in zip([ts_matrices[cnt_idx].T, ts_matrix.T])]
+            pval_ts_matrix[ti,:] = pval_ts
+    pval_ts_matrix = pval_ts_matrix<(1-conf_interval)/2
+    if pltax is not None and ts_window is not None:
+        plt_ts = np.linspace(ts_window[0], ts_window[1], pval_ts_matrix.shape[1])
+        ylim0 = pltax[1].get_ylim()[0]
+        trace_is = list(range(len(ts_matrices)))
+        trace_is.pop(cnt_idx)
+        for cond_i, cond_ts in enumerate(pval_ts_matrix[trace_is]):
+            sig_x_series = plt_ts[np.where(cond_ts == True)]
+            sig_y_series = np.full_like(sig_x_series, ylim0 * (1 + 0.1 * cond_i))
+            pltax[1].scatter(sig_x_series, sig_y_series, marker='o', c=f'C{trace_is[cond_i]}', s=2)
+
+
 def align_wrapper(datadict,filters,align_beh, duration, alignshifts=None, plotsess=False, plotlabels=None,
                   plottitle=None, xlabel=None,animal_labels=None,plotsave=False,coord=None,baseline=True,
                   pupilmetricname='rawarea_zscored',sep_cond_cntrl_flag=False):
