@@ -10,7 +10,7 @@ import matplotlib
 from matplotlib import pyplot as plt
 import pandas as pd
 from sklearn.linear_model import LinearRegression
-import scipy
+# import scipy
 import circle_fit as cf
 from math import pi
 import warnings
@@ -997,21 +997,27 @@ def ts_permutation_test(ts_matrices, n_permutations, conf_interval, cnt_idx=0, p
         for cond_i, cond_ts in enumerate(sig_time_points[trace_is]):
             sig_x_series = plt_ts[np.where(cond_ts == True)]
             sig_y_series = np.full_like(sig_x_series, ylim0 * (1 + 0.1 * cond_i))
-            pltax[1].scatter(sig_x_series, sig_y_series, marker='o', c=f'C{trace_is[cond_i]}', s=2)
+            pltax[1].scatter(sig_x_series, sig_y_series, marker='x', c=f'C{trace_is[cond_i]}', s=2)
 
     return sig_time_points
 
 
 def ts_two_tailed_ht(ts_matrices, conf_interval, cnt_idx=0, pltax=(None, None), ts_window=None,):
-    def two_tailed_ht(sample1, sample2, ci=conf_interval):
+    def two_tailed_ht(sample1, sample2):
+        sample1, sample2 = np.array(sample1), np.array(sample2)
         t_stat, p_val = scipy.stats.ttest_ind(sample1,sample2, equal_var=False)
+        f,a = plt.subplots()
+        if p_val<0.01:
+            a.hist(sample1.T,density=False)
+            a.hist(sample2.T,density=False)
         return p_val
 
-    pval_ts_matrix = np.zeros((len(ts_matrices)-1, ts_matrices.shape[1]))
+    pval_ts_matrix = np.zeros((len(ts_matrices)-1, ts_matrices[0].shape[1]))
     for ti, ts_matrix in enumerate(ts_matrices):
         if ti != cnt_idx:
-            pval_ts = [two_tailed_ht(time_point_sample1, time_point_sample2, conf_interval)
-                       for time_point_sample1, time_point_sample2 in zip([ts_matrices[cnt_idx].T, ts_matrix.T])]
+            pval_ts = [two_tailed_ht(time_point_sample1, time_point_sample2)
+                       for time_point_sample1, time_point_sample2 in
+                       zip(ts_matrices[cnt_idx].to_numpy().T, ts_matrix.to_numpy().T)]
             pval_ts_matrix[ti,:] = pval_ts
     pval_ts_matrix = pval_ts_matrix<(1-conf_interval)/2
     if pltax is not None and ts_window is not None:
@@ -1023,6 +1029,7 @@ def ts_two_tailed_ht(ts_matrices, conf_interval, cnt_idx=0, pltax=(None, None), 
             sig_x_series = plt_ts[np.where(cond_ts == True)]
             sig_y_series = np.full_like(sig_x_series, ylim0 * (1 + 0.1 * cond_i))
             pltax[1].scatter(sig_x_series, sig_y_series, marker='o', c=f'C{trace_is[cond_i]}', s=2)
+
 
 
 def align_wrapper(datadict,filters,align_beh, duration, alignshifts=None, plotsess=False, plotlabels=None,
