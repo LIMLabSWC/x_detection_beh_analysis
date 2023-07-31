@@ -116,7 +116,7 @@ class Main:
         self.dlc_snapshot = dlc_snapshot
 
         today = datetime.strftime(datetime.now(),'%y%m%d')
-        self.figdir = Path(r'c:\bonsai\gd_analysis','figures',today)
+        self.figdir = Path(r'figures',today)
 
     def load_pre_processed(self,pre_pklname:pathlib.Path):
         if self.preprocessed_pklname.exists():
