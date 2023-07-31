@@ -251,6 +251,7 @@ class Main:
             # self.read_and_proccess(session,self.sessions[session])
 
         with open(self.pklname, 'wb') as pklfile:
+            logger.debug(f'Saving {self.pklname}')
             pickle.dump(self.data, pklfile)
         with open(self.preprocessed_pklname, 'wb') as pklfile:
             pickle.dump(self.preprocessed, pklfile)
