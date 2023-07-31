@@ -1,7 +1,7 @@
 pdatadir: '/ceph/akrami/Dammy/mouse_pupillometry/mouse_hf/'
-tdatadir: '~/data/Dammy'
+tdatadir: '/nfs/nhome/live/aonih/data/Dammy'
 dirstyle: 'N_D_it'
-os: windows
+os: unix
 
 dates2process:
  - '230605'
