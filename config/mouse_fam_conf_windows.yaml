@@ -1,0 +1,32 @@
+pdatadir: 'W:\mouse_pupillometry\mouse_hf'
+tdatadir: 'c:\bonsai\data\Dammy'
+dirstyle: 'N_D_it'
+os: windows
+
+dates2process:
+ - '221214'
+ - '221215'
+ - '230116'
+ - '230117'
+ - '230119'
+ - '230214'
+ - '230216'
+ - '230217'
+ - '230221'
+ - '230222'
+ - '230223'
+ - '230224'
+ - '230228'
+ - '230301'
+ - '230303'
+
+animals2process: []
+preprocess_pkl: 'mouse_fam_4rawsize_preprocessed.pkl'
+pkl_dir: 'X:\Dammy\mouse_pupillometry\pickles'
+do_zscore: false
+bandpass_met: [0.0, 4]
+han_size: 0.15
+fs: 90.0
+pdata_topic: 'pupildata_2d'
+use_TTL: true
+protocol: 'fam'

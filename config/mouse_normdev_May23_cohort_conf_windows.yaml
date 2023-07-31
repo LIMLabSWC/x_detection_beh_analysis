@@ -1,0 +1,29 @@
+pdatadir: 'X:\Dammy\mouse_pupillometry\mouse_hf'
+tdatadir: 'c:\bonsai\data\Dammy'
+dirstyle: 'N_D_it'
+os: windows
+
+dates2process:
+ - '230605'
+ - '230606'
+ - '230607'
+ - '230608'
+ - '230717'
+ - '230718'
+ - '230719'  # normdev
+ - '230720'
+ - '230721'
+ - '230727'
+ - '230728' # normdev
+
+protocol: 'normdev'
+animals2process: ['DO65','DO66', 'DO67','DO68']
+preprocess_pkl: 'mouse_2305mice_normdev_preprocessed2.pkl'
+pkl_dir: 'X:\Dammy/mouse_pupillometry\pickles'
+do_zscore: true
+bandpass_met: [0.0,4]
+han_size: 0.15
+fs: 90.0
+pdata_topic: 'pupildata_2d'
+use_TTL: true
+sess_to_redo: ['DO66_230728']
