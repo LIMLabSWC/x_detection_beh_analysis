@@ -270,6 +270,11 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         'd_C2B': ['C_tone_diff', -2],
         'd_C2A': ['C_tone_diff', -4],
         'd_C2D': ['C_tone_diff', 1],
+        'local_rate_1.0': ['Tone_Position_roll', [0.0, 0.1]],
+        'local_rate_0.8': ['Tone_Position_roll', [0.2, 0.3]],
+        'local_rate_0.6': ['Tone_Position_roll', [0.4, 0.5]],
+        'local_rate_0.4': ['Tone_Position_roll', [0.6, 0.7]],
+        'local_rate_0.2': ['Tone_Position_roll', [0.8, 0.9]],
 
     }
     for e in np.linspace(0,1,11):
@@ -530,12 +535,15 @@ def add_datetimecol(df, colname, timefmt='%H:%M:%S.%f'):
     #         datetime_arr.append(np.nan)
     #         # print(t,df.index[i])
     s = df[colname]
-    try:s_split = pd.DataFrame(s.str.split('.').to_list(),columns=['time_hms','time_decimal'])
+    s_nans = s.isnull()
+    s = s.fillna('00:00:00')
+    try:s_split = pd.DataFrame(s[:-1].str.split('.').to_list(),columns=['time_hms','time_decimal'])
     except TypeError: print('typeerror')
     s_dt = pd.to_datetime(s_split['time_hms'],format='%H:%M:%S')
     try:s_dt = vec_dt_replace(s_dt,year=date_array_dt_ser.dt.year,month=date_array_dt_ser.dt.month,
                           day=date_array_dt_ser.dt.day, nanosecond=pd.to_numeric(s_split['time_decimal'].str.ljust(9,'0')))
     except:print('error')
+    s_dt.iloc[s_nans] = pd.NaT
     df[f'{colname}_dt'] = s_dt.to_numpy()
     # datetime_arr = pd.to_datetime(df[colname], format='%H:%M:%S.%f')
     # _dt_df = pd.DataFrame(list(zip(date_array_dt,datetime_arr)))
@@ -591,8 +599,8 @@ def align2eventScalar(df, timeseries_data, pupiltimes, pupiloutliers, beh, dur, 
     for i, eventtime in enumerate(filtered_df[beh]):
         # print(dataseries)
         # print(eventtime + timedelta(seconds=float(dur[0])),eventtime + timedelta(seconds=float(dur[1])))
-        # eventtime = eventtime + timedelta(hours=float(df['Offset'].iloc[i]))
-        eventtime = eventtime + timedelta(hours=float(1))
+        eventtime = eventtime + timedelta(hours=float(df['Offset'].iloc[i]))
+        # eventtime = eventtime + timedelta(hours=float(1))
         eventpupil = copy(dataseries.loc[eventtime + timedelta(0,dur[0]): eventtime + timedelta(0,dur[1])])
         eventoutliers = copy(outlierstrace.loc[eventtime + timedelta(0,dur[0]): eventtime + timedelta(0,dur[1])])
         # print((eventoutliers == 0.0).sum(),float(len(eventpupil)))
@@ -1539,12 +1547,21 @@ class PupilEventConditions:
             'p_rate_fm': [[['plow'], ['pmed'], ['phigh'], ['ppost'], ['none']],
                           ['0.1', '0.5', '0.9', '0.6', 'control']],
 
-        }
+            'p_rate_local': [[['local_rate_0.2','tones4'],['local_rate_0.4','tones4'],['local_rate_0.6','tones4'],
+                              ['local_rate_0.8','tones4'],['local_rate_1.0','tones4'], ['none']],
+                             ['1st Q','2nd Q','3rd Q', '4th Q', '5th Q', 'control']],
 
+        }
         normdev_filts = {
-            'normdev': [[['d0'], ['d!0']], ['Normal', 'Deviant']],
-            'normdev_newnorms': [[['d0'], ['d!0'], ['d-1']], ['Normal', 'Deviant', 'New Normal']],
-            'pat_nonpatt_2X': [[['e!0'], ['none']], ['Pattern Sequence Trials', 'No Pattern Sequence Trials']],
+            'normdev': [[['d0','tones4'], ['d!0','tones4']], ['Normal', 'Deviant']],
+            'normdev_newnorms': [[['d0','tones4'], ['d!0','tones4'], ['d-1','tones4']],
+                                 ['Normal', 'Deviant', 'New Normal']],
+            'pat_nonpatt_2X': [[['e!0','tones4'], ['none']], ['Pattern Sequence Trials', 'No Pattern Sequence Trials'],
+                               'Gap_Time'],
+            'normdev_2TS': [[['e!0', 'tones4'], ['none']],
+                            ['Pattern Sequence Trials', 'No Pattern Sequence Trials'], 'Trial_Start'],
+            'normdev_2X': [[['e!0', 'tones4'], ['none']],
+                            ['Pattern Sequence Trials', 'No Pattern Sequence Trials'], 'Gap_Time']
         }
         self.all_filts = {**fam_filts, **normdev_filts}
 
@@ -1585,7 +1602,9 @@ class PupilEventConditions:
             if cond_key in dataclass.aligned.keys():
                 print(f'{cond_key} exists. Skipping')
                 continue
-            if '2X' in cond_key:
+            if len(cond_filts) == 3:
+                cond_align_point = cond_filts[2]
+            elif '2X' in cond_key:
                 cond_align_point = align_pnts[2]
             else:
                 cond_align_point = align_pnts[0]

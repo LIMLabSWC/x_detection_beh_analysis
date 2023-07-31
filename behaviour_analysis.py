@@ -10,7 +10,6 @@ import analysis_utils as utils
 import pylab
 from sklearn.linear_model import LinearRegression
 from math import floor,ceil
-import copy
 import scipy.signal
 import psychophysicsUtils
 
@@ -33,15 +32,22 @@ class TDAnalysis:
         self.dates = sorted(self.trialData.loc[self.animals].index.to_frame()['Date'].unique())
 
         # add datetime cols
-        for col in self.trialData.keys():
-            if col.find('Time') != -1 or col.find('Start') != -1 or col.find('End') != -1:
-                if col.find('Wait') == -1 and col.find('dt') == -1 and col.find('Lick_Times') == -1:
-                    utils.add_datetimecol(self.trialData, col)
+        self.add_dt_cols2sesstd(['Trial_Start','Trial_End','Time','ToneTime','Gap_Time','RewardTone_Time'])
+        self.trialData.set_index('Trial_Start_dt', append=True, inplace=True)
+
+            #
+            # if col.find('Time') != -1 or col.find('Start') != -1 or col.find('End') != -1:
+            #     if col.find('Wait') == -1 and col.find('dt') == -1 and col.find('Lick_Times') == -1:
+            #         utils.add_datetimecol(self.trialData, col)
 
         # add reaction time col
-        # stim1_tdelta = self.trialData['Stim1_Duration'].apply(lambda e: timedelta(0, e))
-        # self.trialData['Reaction_time'] = self.trialData['Trial_End_dt'] - (self.trialData['Trial_Start_dt'] +
-        #                                                                     stim1_tdelta)
+        self.trialData['Reaction_time'] = (self.trialData['Trial_End_dt'] -
+                                           self.trialData['Gap_Time_dt']).dt.total_seconds()
+    def add_dt_cols2sesstd(self,column_names):
+        # for sess in self.data:
+        #     sess_td = self.data[sess].trialData
+        for col in column_names:
+            utils.add_datetimecol(self.trialData,col)
 
     def beh_daily(self, plot=False, filters=('b1',)) -> (dict, plt.subplots):
         stats_dict = dict()
@@ -72,7 +78,7 @@ class TDAnalysis:
                 for id, d in enumerate(sorted(stats_dict[animal].keys())):
                     print(d)
                     for f, feature in enumerate(stats_dict[animal][d]):
-                        if i is 0:
+                        if i == 0:
                             ax[f].scatter(self.dates,np.full_like(self.dates,0),facecolors='none',edgecolor='none',s=15)
                         ax[f].scatter(d, stats_dict[animal][d][feature], marker='o', facecolors=f'C{i}',
                                       edgecolor=f'C{i}',
@@ -203,47 +209,122 @@ class TDAnalysis:
                     all_sess_eventz_list.append(all_sess_eventz)
         return fig,axes,pd.concat(all_sess_eventz_list,axis=0)
 
+    def scatter_trial_metric_bysess(self,metric, dates=None, conditions=None, by_animal_flag=True, pointcloud_flag=True):
+
+        if isinstance(dates, str):
+            dates = [dates]
+        elif not dates:
+            dates = self.dates
+        metric_series = utils.filter_df(self.trialData,['a1']).get(metric,None)
+        # if any(reaction_times):
+        #     print('No "Reaction_time" column, Returning None')
+        #     return None
+        assert len(metric_series.index.names) == 3, 'missing index level'
+
+        trial_metric_plot = plt.subplots()
+        plot_markers = ['1','2','3','4','+']
+        for date_i, date in enumerate(dates):
+            sessions4dates = metric_series.loc[:,[date],:]
+            if by_animal_flag:
+                animals4date = sorted(sessions4dates.index.get_level_values('Name').unique())
+                # animals4date = ['DO69']
+                metric_data_df = []
+                for animal in animals4date:
+                    metric_data_df.append(sessions4dates.loc[animal,:].to_numpy())
+            else:
+                metric_data_df = [sessions4dates.to_numpy()]
+            if pointcloud_flag:
+                for sess_i, session_metric_series in enumerate(metric_data_df):
+                    x_series = np.random.uniform(low=date_i-0.1, high=date_i+0.1,size=len(session_metric_series))
+                    trial_metric_plot[1].scatter(x_series,session_metric_series,c=f'C{sess_i}',
+                                       alpha=0.025,)
+            for sess_i, session_metric_series in enumerate(metric_data_df):
+                metric_low,metric_high = np.abs(np.quantile(session_metric_series,[0.05,0.95],method='normal_unbiased')-np.median(session_metric_series))
+                trial_metric_plot[1].errorbar(date_i, np.median(session_metric_series), np.vstack([metric_low,metric_high]),c=f'C{sess_i}',
+                                    capsize=10.0,fmt='o',mec='k',mfc=f'C{sess_i}',mew=1,lw=1)
+
+
+
+        return trial_metric_plot
+
+    def ntrials_since_last(self,column='Tone_Position'):
+        td_df = self.trialData
+        column_data = td_df[column]
+
+
+
 if __name__ == '__main__':
     plt.rcParams["figure.figsize"] = [8.00, 6.00]
     # plt.rcParams["figure.autolayout"] = True
 
     datadir = r'C:\bonsai\data'
-    # animals = [
-    #             'DO54',
-    #             'DO55',
-    #             'DO56',
-    #             'DO57'
-    #            ]
-    animals = [f'DO{i}' for i in range(50,54)]
-    dates = ['21/01/2022', '31/01/2023']  # start/end date for analysis
-    # dates = ['02/11/2022', '08/11/2022']  # start/end date for analysis
+    animals = [
+                'DO64',
+                'DO69',
+                'DO70'
+               ]
+    animals = [f'DO{i}' for i in range(54,59)]
+    # dates = ['07/06/2023', '09/08/2023']  # start/end date for analysis
+    dates = ['02/02/2023', '03/03/2023']  # start/end date for analysis
     td_obj = TDAnalysis(datadir,animals,dates)
 
+    plots = utils.plot_performance(td_obj.trialData, np.arange(7,13,1), animals, dates,['b','r','y'])
 
-    # event raster
-    td_obj.add_data_dict()
-    # harpmatrices = utils.get_event_matrix(td_obj,td_obj.data,r'W:\mouse_pupillometry\mouse_hf\harpbins',)
-    # td_obj.harpmatrices = utils.get_event_matrix(td_obj,td_obj.data,r'W:\mouse_pupillometry\mouse_hf\harpbins',)
-    td_obj.harpmatrices = utils.get_event_matrix(td_obj,td_obj.data,r'W:\mouse_pupillometry\mouseprobreward_hf\harpbins',)
+    reaction_time_plot = td_obj.scatter_trial_metric_bysess('Reaction_time',dates=['230607','230608','230609',
+                                                                                   '230717','230718','230719',
+                                                                                   '230720','230721','230724','230725'])
+    reaction_time_plot[1].set_ylabel('Reaction time (s)')
+    reaction_time_plot[1].set_ylim(0.1, 1)
+    reaction_time_plot[1].set_xticklabels([])
+    reaction_time_plot[0].show()
+
+    early_licks_plot = td_obj.scatter_trial_metric_bysess('Early_Licks')
+    early_licks_plot[0].show()
+
+    eg_sess_scatterplot = plt.subplots()
+    eg_sess = td_obj.trialData.loc['DO56','230301',:]
+
+    eg_sess_scatterplot[1].scatter(np.arange(eg_sess.shape[0]),eg_sess['Tone_Position']==0,marker='o',facecolor='white',
+                                   edgecolor='grey')
+    eg_sess_scatterplot[1].plot(np.arange(eg_sess.shape[0]),(eg_sess['Tone_Position']==0).rolling(10).mean(),
+                                color='k',ls='--')
+    eg_sess_scatterplot[0].set_size_inches(20,9)
+    for r_i, rate in enumerate([0.1,0.5,0.9]):
+        eg_sess_scatterplot[1].fill_between(np.arange(eg_sess.shape[0]), 0, 1,
+                                            where=eg_sess['PatternPresentation_Rate'].to_numpy() == round(1.0-rate,1), color=f'C{r_i}',
+                                            alpha=0.1,label=f'rate = {rate}')
+    eg_sess_scatterplot[1].set_title('Pattern presentation rate for example session')
+    eg_sess_scatterplot[1].set_ylabel('Pattern Presentation Rate (sliding window size 10)')
+    eg_sess_scatterplot[1].set_xlabel('Trial Number')
+    eg_sess_scatterplot[0].set_constrained_layout('constrained')
+    eg_sess_scatterplot[1].legend(loc=0,ncols=3)
+    eg_sess_scatterplot[0].show()
 
 
-    # for mat_name in harpmatrices:
-    #     td_obj.data[mat_name].harpmatrices = copy.deepcopy(dict())
-    #     td_obj.data[mat_name].harpmatrices = copy.deepcopy(harpmatrices[mat_name])
-    plt.ion()
-    td_obj.lickrasters_whitenoise = td_obj.get_aligned_events('Gap_Time_dt',2,(-5.0,5.0),)
-    # td_obj.lickrasters_trialstart = td_obj.get_aligned_events('Trial_Start_dt',0,(-1.0,10.0),)
-
-    # dates2plot = ['221103','221104','221107','221108']
-    dates2plot = ['230121', '230126', '230131']
-    fig,ax = plt.subplots(len(td_obj.animals),len(dates2plot),sharex='all',sharey='all')
-    for di,d in enumerate(dates2plot):
-        for a,animal in enumerate(td_obj.animals):
-            ax[a][di].plot(td_obj.trialData.loc[animal,d]['Early_Licks'].to_numpy(),label=animal,c=f'C{a}')
-            ax[a][di].legend(loc=1)
-            ax[a][di].set_ylim((0,25))
-            ax[a][di].set_yticks([0,10,20])
-        ax[a][di].set_xlabel('Trial number',fontsize=11)
-    fig.text(0.075,0.5,'Number of early licks',rotation=90,ha='left', va='center',fontsize=11)
-    fig.text(0.5,0.95,f'Change in early licks over trials for {" ".join(dates2plot)}',ha='center', va='top',fontsize=11)
-    fig.savefig(rf'W:\mouse_pupillometry\figures\hf_licks\n_early_licks_{"_".join(dates2plot)}_new.svg',bbox_inches='tight')
+    # # event raster
+    # td_obj.add_data_dict()
+    # # harpmatrices = utils.get_event_matrix(td_obj,td_obj.data,r'W:\mouse_pupillometry\mouse_hf\harpbins',)
+    # # td_obj.harpmatrices = utils.get_event_matrix(td_obj,td_obj.data,r'W:\mouse_pupillometry\mouse_hf\harpbins',)
+    # # td_obj.harpmatrices = utils.get_event_matrix(td_obj,td_obj.data,r'W:\mouse_pupillometry\mouseprobreward_hf\harpbins',)
+    #
+    #
+    # # for mat_name in harpmatrices:
+    # #     td_obj.data[mat_name].harpmatrices = copy.deepcopy(dict())
+    # #     td_obj.data[mat_name].harpmatrices = copy.deepcopy(harpmatrices[mat_name])
+    # plt.ion()
+    # td_obj.lickrasters_whitenoise = td_obj.get_aligned_events('Gap_Time_dt',2,(-5.0,5.0),)
+    # # td_obj.lickrasters_trialstart = td_obj.get_aligned_events('Trial_Start_dt',0,(-1.0,10.0),)
+    #
+    # # dates2plot = ['221103','221104','221107','221108']
+    # dates2plot = ['230607', '230608', '230609']
+    # fig,ax = plt.subplots(len(td_obj.animals),len(dates2plot),sharex='all',sharey='all')
+    # for di,d in enumerate(dates2plot):
+    #     for a,animal in enumerate(td_obj.animals):
+    #         ax[a][di].plot(td_obj.trialData.loc[animal,d]['Early_Licks'].to_numpy(),label=animal,c=f'C{a}')
+    #         ax[a][di].legend(loc=1)
+    #         ax[a][di].set_ylim((0,25))
+    #         ax[a][di].set_yticks([0,10,20])
+    #     ax[a][di].set_xlabel('Trial number',fontsize=11)
+    # fig.text(0.075,0.5,'Number of early licks',rotation=90,ha='left', va='center',fontsize=11)
+    # fig.text(0.5,0.95,f'Change in early licks over trials for {" ".join(dates2plot)}',ha='center', va='top',fontsize=11)
+    # fig.savefig(rf'W:\mouse_pupillometry\figures\hf_licks\n_early_licks_{"_".join(dates2plot)}_new.svg',bbox_inches='tight')

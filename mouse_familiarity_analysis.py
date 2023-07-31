@@ -25,9 +25,11 @@ if __name__ == "__main__":
     paradigm = ['familiarity']
     # pkldir = r'c:\bonsai\gd_analysis\pickles'
     pkldir = r'X:\Dammy\mouse_pupillometry\pickles'
-    pkl2use = os.path.join(pkldir,'mouse_hf_fam_2d_90Hz_hpass001_lpass4hanning025_TOM.pkl')
+    pkl2use = os.path.join(pkldir,'mouse_hf_fam_2d_90Hz_hpass00_lpass4hanning015_TOM.pkl')
 
-    run = Main(pkl2use, (-1.0, 3.0), figdir=rf'W:\mouse_pupillometry\figures\mouse_2305mice_fam',fig_ow=True)
+    run = Main(pkl2use, (-1.0, 3.0), figdir=rf'W:\mouse_pupillometry\figures\mouse_2305mice_fam',fig_ow=False)
+    run_oldmice = Main(r'W:\mouse_pupillometry\pickles\mouse_hf_fam3_2d_90Hz_lpass4_hpass00_hanning025_TOM_w_LR_detrend_wTTL_.pkl',
+                       (-1.0, 3.0), figdir=rf'W:\mouse_pupillometry\figures\mouse_2305mice_fam',fig_ow=False)
     pmetric2use = ['diameter_2d_zscored','dlc_radii_a_zscored','dlc_EW_zscored','dlc_EW_normed']
 
     do_baseline = True  # 'rawsize' not in pkl2use
@@ -44,6 +46,7 @@ if __name__ == "__main__":
         dates2plot = run.dates
         stages = [3]
         run.add_stage3_05_order()
+        run.add_rolling_mean('Tone_Position',10)
 
         # dateconds = ['80% Rew 5 uL (day 1)','80% Rew 2 uL','50% Rew 5 uL','80% Rew 5 uL (day 2)','95% Rew 5 uL']
         # dateconds = ['Day 1: 0.9 then 0.1', 'Day 2: 0.9 then 0.1',
@@ -69,21 +72,27 @@ if __name__ == "__main__":
 
         keys = []
 
-        condition_keys = ['p_rate', 'p_rate_ctrl', 'p_onset', 'alt_rand', 'alt_rand_ctrl', 'pat_nonpatt_2X', 'p_rate_fm']
+        condition_keys = ['p_rate', 'p_rate_ctrl', 'p_onset', 'alt_rand', 'alt_rand_ctrl', 'pat_nonpatt_2X', 'p_rate_fm',
+                          'p_rate_local']
 
-        aligned_pklfile = r'pickles\fm_fam_aligned.pkl'
+        aligned_pklfile = r'pickles\fm_fam_aligned_nohpass.pkl'
         # aligned_pklfile = r'pickles\DO54_62_aligned_notrend.pkl'
-        aligned_ow = True
+        aligned_ow = False
+        conditions_class = utils.PupilEventConditions()
+        list_cond_filts = conditions_class.all_filts
         if os.path.isfile(aligned_pklfile) and aligned_ow is False:
             with open(aligned_pklfile,'rb') as pklfile:
                 run.aligned = pickle.load(pklfile)
 
                 keys = [[e] for e in run.aligned.keys()]
-        list_cond_filts = utils.get_condition_dict(run, condition_keys,stages,)  #'a1'
+        else:
+            conditions_class.get_condition_dict(run, condition_keys,stages,)  #'a1'
 
         with open(aligned_pklfile, 'wb') as pklfile:
             pickle.dump(run.aligned,pklfile)
 
+        # for sess in run.data:
+        #     run.data[sess].trialData['Offset'] = run.data[sess].trialData['Offset'].astype(float) + 1.0
 
         run.aligned['alt_rand_nocontrol'] = copy(run.aligned['alt_rand'])
         run.aligned['alt_rand_nocontrol'][2].pop(2)
@@ -169,8 +178,13 @@ if __name__ == "__main__":
             '230605',
             '230606',
             '230607',
-            '230608',
+            '230608',   # muscimol day (64, 69)
             '230609',
+            '230717',
+            '230718',
+            '230719',  # muscimol day 2 0.5 uL dose (64,69,70)
+            '230720',
+            '230721',
             ]
         p_rate_tsplots = plt.subplots(figsize=(9,7))
 
@@ -180,7 +194,8 @@ if __name__ == "__main__":
                    pltaxis=p_rate_tsplots,exclude_idx=[None],ctrl_idx=3
                    )
         p_rate_tsplots[0].show()
-        # utils.ts_permutation_test(prate_aligned[2],5000,0.95,3,p_rate_tsplots,run.duration)
+        utils.ts_permutation_test(prate_aligned[2],500,0.95,3,p_rate_tsplots,run.duration)
+        utils.ts_two_tailed_ht(prate_aligned[2],0.95,3,p_rate_tsplots,run.duration)
         p_rate_tsplots[0].show()
 
         p_rate_over_dates_tsplot = plt.subplots(ncols=len(p_rate_dates),squeeze=False,sharey='all')
@@ -196,18 +211,31 @@ if __name__ == "__main__":
         p_rate_over_dates_tsplot[0].show()
         # example multiple prate plots over dates
         prate_example_dates = p_rate_dates
-        prate_multiple_dates_plot = plt.subplots(ncols=4,nrows=math.ceil(len(p_rate_dates)/4),
-                                                 figsize=(9*4,14),sharey='all')
+        ncols = 3
+        prate_multiple_dates_plot = plt.subplots(ncols=ncols,nrows=math.ceil(len(prate_example_dates)/ncols),
+                                                 figsize=(9*4,21),sharey='all',squeeze=False)
         for di,date2plot in enumerate(prate_example_dates):
             prate_aligned = get_subset(run, run.aligned, 'p_rate', {'date': date2plot}, events=list_cond_filts['p_rate'][1],
                                        beh=f'{align_pnts[0]} onset',
                                        plttitle=f'Response to pattern onset {date2plot}', plttype='ts',
                                        ylabel='zscored pupil size', xlabel=f'Time since pattern onset (s)',
                                        pltaxis=(prate_multiple_dates_plot[0],
-                                                prate_multiple_dates_plot[1][int(di/4),di%4]),
+                                                prate_multiple_dates_plot[1][int(di/ncols),di%ncols]),
                                        )
         prate_multiple_dates_plot[0].set_constrained_layout('constrained')
         prate_multiple_dates_plot[0].show()
+
+        conditions_class.get_condition_dict(run_oldmice, ['p_rate'], stages, extra_filts=['a1'])
+        old_vs_new_tsplot = plt.subplots(ncols=2,sharey='all')
+        prate_aligned_old = get_subset(run_oldmice, run_oldmice.aligned, 'p_rate',{'date':['230214', '230216', '230221', '230222', '230113', ]},
+                                       events=list_cond_filts['p_rate'][1],
+                                       beh=f'{align_pnts[0]} onset',
+                                       plttitle=f'Response to pattern onset', plttype='ts',
+                                       ylabel='zscored pupil size', xlabel=f'Time since pattern onset (s)',
+                                       pltaxis=(old_vs_new_tsplot[0],
+                                                old_vs_new_tsplot[1][0]),
+                                       )
+        old_vs_new_tsplot[0].show()
 
         print('break now if wanted')
         time.sleep(30)

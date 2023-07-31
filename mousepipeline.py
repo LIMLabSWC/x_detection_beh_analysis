@@ -100,15 +100,8 @@ if __name__ == "__main__":
             if spec_dates:
                 if d in dates2process:
                     animals2process.append(e)
-    # spec_animal = []
     spec_animal_dates = []
 
-    # for i,e in enumerate(animals):
-    #     if e in animals:  #['DO48']:
-    #         spec_animal.append(e)
-    #         spec_animal_dates.append(animaldates[i])
-
-    # han_size = 1
     do_zscore = config['do_zscore']
     bandpass_met = config['bandpass_met']
     han_size = config['han_size']
@@ -127,8 +120,8 @@ if __name__ == "__main__":
 
     run = Main(animals2process, dates2process,Path(config['pkl_dir'], pklname), tdatadir,
                pdatadir, pdata_topic, fs, han_size=han_size, passband=bandpass_met, aligneddir=aligneddir,
-               subjecttype='mouse', dlc_snapshot=[2450000, 1300000], overwrite=False, do_zscore=do_zscore,
-               lowtype=lowtype, dirstyle=dirstyle, dlc_filtflag=True, redo=None,
+               subjecttype='mouse', dlc_snapshot=[2450000, 1300000], overwrite= True, do_zscore=do_zscore,
+               lowtype=lowtype, dirstyle=dirstyle, dlc_filtflag=True, redo=config['sess_to_redo'],
                preprocess_pklname=Path(config['pkl_dir'], config['preprocess_pkl']),use_ttl=config['use_TTL'],
                protocol='probreward')
     logger.info('Main class initialised')

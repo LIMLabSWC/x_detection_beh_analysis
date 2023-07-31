@@ -24,12 +24,14 @@ if __name__ == "__main__":
     # paradigm = ['familiarity']
     # pkldir = r'c:\bonsai\gd_analysis\pickles'
     pkldir = r'X:\Dammy/mouse_pupillometry\pickles'
-    pkl2use = os.path.join(pkldir,'mouse_hf_normdev_2d_90Hz_hpass004_lpass4hanning025_TOM.pkl')
+    pkl2use = os.path.join(pkldir,'mouse_hf_normdev_2d_90Hz_hpass00_lpass4hanning015_TOM.pkl')
     # pkl2use = os.path.join(pkldir,r'mouseprobreward_2d_90Hz_6lpass_025hpass_wdlc_TOM_interpol_all_int02s_221028.pkl')
 
     run = Main(pkl2use, (-1.0, 5.0), figdir=rf'W:\mouse_pupillometry\figures\mouse_normdev',fig_ow=False)
     pmetric2use = ['diameter_2d_zscored','dlc_radii_a_zscored','dlc_EW_zscored','dlc_radii_a_processed','dlc_EW_processed']
 
+    for sess in run.data:
+        run.data[sess].trialData['Offset'] = run.data[sess].trialData['Offset'].astype(float) + 1.0
     do_baseline = True  # 'rawsize' not in pkl2use
     if 'normdev' in paradigm:
         run.add_pretone_dt()
@@ -37,11 +39,14 @@ if __name__ == "__main__":
         run.add_viol_diff()
         run.aligned = {}
         align_pnts = ['ToneTime','Reward','Gap_Time','Violation','Trial_Start']
+        conditions_class = utils.PupilEventConditions()
+        list_cond_filts = conditions_class.all_filts
         # dates2plot = ['221005','221014','221021','221028','221104']
         # dates2plot = ['230126','230127','230206','230207']
         # dates2plot = ['230306','230307','230308','230310']  # new normdev 0.1 rate
         # dates2plot = ['230317']
-        dates2plot=run.dates
+        dates2plot = ['230719','230728']
+        # dates2plot=run.dates
         animals2plot=run.labels
         stages=[4]
 
@@ -63,7 +68,7 @@ if __name__ == "__main__":
         keys = []
 
 
-        aligned_pklfile = r'pickles\normdev_2305cohort_fam_aligned.pkl'
+        aligned_pklfile = r'pickles\normdev_2305cohort_aligned.pkl'
         # aligned_pklfile = r'pickles\DO54_62_aligned_notrend.pkl'
         aligned_ow = True
         if os.path.isfile(aligned_pklfile) and not aligned_ow:
@@ -72,7 +77,7 @@ if __name__ == "__main__":
 
                 keys = [[e] for e in run.aligned.keys()]
         else:
-            list_cond_filts = utils.get_condition_dict(run, ['normdev', 'pat_nonpatt_2X','normdev_newnorms'], stages, )
+            conditions_class.get_condition_dict(run, ['normdev', 'pat_nonpatt_2X','normdev_newnorms','normdev_2TS'], stages, extra_filts=['a1'] )
             with open(aligned_pklfile,'wb') as pklfile:
                 pickle.dump(run.aligned,pklfile)
 
@@ -85,7 +90,6 @@ if __name__ == "__main__":
             #                                cond_filts[0], cond_filts[1], pmetric=pmetric2use[2],
             #                                filter_df=True, plot=True, sep_cond_cntrl_flag=False, cond_name=cond_key,
             #                                use4pupil=True, baseline=do_baseline, pdr=False, extra_filts=[]))  #'a1'
-
 
 
         # keys.append(batch_analysis(run, run.aligned, stages, f'{align_pnts[0]}_dt', [[0.0, f'{align_pnts[0]}'], ],
@@ -155,8 +159,8 @@ if __name__ == "__main__":
                                              bbox_inches='tight')
 
     normdev_tsplot = plt.subplots(figsize=(9, 7))
-    normdev_aligned = get_subset(run, run.aligned, 'normdev_newnorms', {'date': '230608'},
-                                 events=list_cond_filts['normdev_newnorms'][1],
+    normdev_aligned = get_subset(run, run.aligned, 'normdev', {'date': '230728'},
+                                 events=list_cond_filts['normdev'][1],
                                beh=f'{align_pnts[0]} onset', plttitle='Response to Pattern onset across conditions',
                                plttype='ts',
                                ylabel='zscored pupil size', xlabel=f'Time since Pattern Onset (s)',
@@ -164,15 +168,23 @@ if __name__ == "__main__":
                                )
     normdev_tsplot[0].show()
 
-    normdev_tsplot_bysess = plt.subplots(nrows=2,ncols=2,figsize=(18, 14))
-    plots = plot_traces(run.labels, ['230608'], run.aligned['normdev_newnorms'], run.duration, run.samplerate,
+    normdev_tsplot_bysess = plt.subplots(nrows=2,ncols=2,figsize=(50, 35))
+    plots = plot_traces(run.labels, ['230719','230728'], run.aligned['normdev'], run.duration, run.samplerate,
                         cmap_flag=True, cond_subset=[1],binsize=5,binskip=3)
     utils.unique_legend([plots[0], plots[1]])
     plots[0].show()
-    # for ai, animal in enumerate(run.labels):
-
-
-
+    normdev_tsplot_byanimal = plt.subplots(len(run.labels),squeeze=False,sharey='all')
+    dates2plot = ['230728']
+    for ai, animal in enumerate(run.labels):
+        get_subset(run,run.aligned,'normdev', {'date': dates2plot,'name':animal},
+                   events=list_cond_filts['normdev'][1],
+                   beh=f'{align_pnts[0]} onset', plttitle='Response to Pattern onset across conditions',
+                   plttype='ts', ntrials=[1000,10],
+                   ylabel='zscored pupil size', xlabel=f'Time since Pattern Onset (s)',
+                   pltaxis=(normdev_tsplot_byanimal[0],normdev_tsplot_byanimal[1][ai,0]), exclude_idx=[None],
+                   )
+    normdev_tsplot_byanimal[0].set_size_inches(9,21)
+    normdev_tsplot_byanimal[0].show()
 
     base_plt_title = 'Evolution of pupil response with successive licks'
     # animals2plot = ['DO54','DO55','DO56','DO57']
@@ -196,7 +208,7 @@ if __name__ == "__main__":
     if do_harp_stuff:
         plt.ioff()
         list_dfs = utils.merge_sessions(r'c:\bonsai\data\Dammy',run.labels,'TrialData',['221005',run.dates[-1]])
-        run.trialData = pd.concat(list_dfs)
+        run.trialData = pd.cocat(list_dfs)
         for col in run.trialData.columns:
             if 'Time' in col:
                 utils.add_datetimecol(run.trialData,col)

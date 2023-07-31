@@ -172,27 +172,26 @@ class Main:
         pupil_diams_nozscore = copy(pclass.pupilDiams)
 
         # pclass.pupilDiams = utils.smooth(pclass.pupilDiams,int(self.han_size/self.samplerate))
+        if self.lowtype == 'filter':
+            if filt_params[0] > 0 :
+                pclass.pupilDiams = utils.butter_filter(pclass.pupilDiams, filt_params, 1 / self.samplerate, filtype='band')
+            else:
+                pclass.pupilDiams = utils.butter_filter(pclass.pupilDiams, filt_params[1], 1 / self.samplerate, filtype='low')
+        elif self.lowtype == 'hanning':
+            if filt_params[0] > 0:
+                pclass.pupilDiams = utils.butter_filter(utils.smooth(pclass.pupilDiams.copy(), int(self.han_size / self.samplerate)),
+                                                        filt_params[0], 1 / self.samplerate, filtype='high')
+            else:
+                pclass.pupilDiams = utils.smooth(pclass.pupilDiams.copy(), int(self.han_size / self.samplerate))
+
         if self.zscore:
-            if self.lowtype == 'filter':
-                if filt_params[0] > 0 :
-                    pclass.pupilDiams = utils.butter_filter(pclass.pupilDiams, filt_params, 1 / self.samplerate, filtype='band')
-                else:
-                    pclass.pupilDiams = utils.butter_filter(pclass.pupilDiams, filt_params[1], 1 / self.samplerate, filtype='low')
-            elif self.lowtype == 'hanning':
-                if filt_params[0] > 0:
-                    pclass.pupilDiams = utils.butter_filter(utils.smooth(pclass.pupilDiams.copy(), int(self.han_size / self.samplerate)),
-                                                            filt_params[0], 1 / self.samplerate, filtype='high')
-                else:
-                    pclass.pupilDiams = utils.smooth(pclass.pupilDiams.copy(), int(self.han_size / self.samplerate))
             pclass.zScore()
-        else:
-            pclass.pupilDiams = utils.butter_filter(pclass.pupilDiams, self.passband[1], 1 / self.samplerate,
-                                                    filtype='low')
-        pclass.plot(self.figdir,saveName=f'{name}_{pdf_colname}',)
+
+        # pclass.plot(self.figdir,saveName=f'{name}_{pdf_colname}',)
 
         return pclass.pupilDiams, pclass.isOutlier, pupil_diams_nozscore
 
-    @logger.catch
+    # @logger.catch
     def load_pdata(self):
         if not self.figdir.is_dir():
             self.figdir.mkdir()
@@ -319,27 +318,36 @@ class Main:
                                     animal_pupil['frametime'] = rec['Timestamp_adj'].apply(lambda e:
                                                                                            bonsai0+timedelta(seconds=float(e)/1e9))
                                     if len(list(event92_files)) > 0 and self.use_ttl:  #  change back to >0
+                                        use_cam_timestamp = True
                                         event92_df = event92_df_list[ri]
                                         cam_ttls = event92_df['Timestamp']
-                                        cam_ttls_dt = np.full_like(cam_ttls, np.nan, dtype=object)
-                                        ttl_harp_times = np.array(cam_ttls.values)
-                                        mega_matrix = np.abs(np.array(np.matrix(session_TD['Harp_time'])).T-ttl_harp_times)
-                                        mega_matrix_mins_idx = np.argmin(mega_matrix, axis=0)
-                                        matrix_bonsai_times = np.array(session_TD['Bonsai_time_dt'][mega_matrix_mins_idx]
-                                                                       ,dtype='datetime64[us]')
-                                        matrix_offset_times = np.array(session_TD['Offset'][mega_matrix_mins_idx],dtype=float)
-                                        matrix_harp_times = np.array(session_TD['Harp_time'][mega_matrix_mins_idx]
-                                                                       ,dtype='datetime64[us]')
-                                        matrix_d_harp_times = ttl_harp_times - \
-                                                              session_TD['Harp_time'][mega_matrix_mins_idx]
-                                        tdelta_arr = np.array((matrix_d_harp_times*1e6).astype(int) +
-                                                              (matrix_offset_times*3600*1e6).astype(int),
-                                                              dtype='timedelta64[us]')
-                                        ttl_bonsai_time = matrix_bonsai_times + tdelta_arr
-                                        # animal_pupil = pd.DataFrame(ttl_bonsai_time,columns=['frametime'])
-                                        # animal_pupil.index=animal_pupil['frametime']
-                                        try: animal_pupil['frametime'] = ttl_bonsai_time[:animal_pupil.shape[0]]
-                                        except: logger.warning(f'ttl times not used for: {name}')
+                                        if use_cam_timestamp:
+                                            harp_sync_ttl_offest_secs = cam_ttls[0] - session_TD['Harp_time'][0]
+                                            new_times = rec['Timestamp_adj'].apply(lambda e:
+                                                                                           session_TD['Bonsai_time_dt'][0]
+                                                                                           +timedelta(seconds=float(e)/1e9+harp_sync_ttl_offest_secs))
+                                            animal_pupil['frametime'] = new_times
+
+                                        else:
+                                            cam_ttls_dt = np.full_like(cam_ttls, np.nan, dtype=object)
+                                            ttl_harp_times = np.array(cam_ttls.values)
+                                            mega_matrix = np.abs(np.array(np.matrix(session_TD['Harp_time'])).T-ttl_harp_times)
+                                            mega_matrix_mins_idx = np.argmin(mega_matrix, axis=0)
+                                            matrix_bonsai_times = np.array(session_TD['Bonsai_time_dt'][mega_matrix_mins_idx]
+                                                                           ,dtype='datetime64[us]')
+                                            matrix_offset_times = np.array(session_TD['Offset'][mega_matrix_mins_idx],dtype=float)
+                                            matrix_harp_times = np.array(session_TD['Harp_time'][mega_matrix_mins_idx]
+                                                                           ,dtype='datetime64[us]')
+                                            matrix_d_harp_times = ttl_harp_times - \
+                                                                  session_TD['Harp_time'][mega_matrix_mins_idx]
+                                            tdelta_arr = np.array((matrix_d_harp_times*1e6).astype(int) +
+                                                                  (matrix_offset_times*3600*1e6).astype(int),
+                                                                  dtype='timedelta64[us]')
+                                            ttl_bonsai_time = matrix_bonsai_times + tdelta_arr
+                                            # animal_pupil = pd.DataFrame(ttl_bonsai_time,columns=['frametime'])
+                                            # animal_pupil.index=animal_pupil['frametime']
+                                            try: animal_pupil['frametime'] = ttl_bonsai_time[:animal_pupil.shape[0]]
+                                            except: logger.warning(f'ttl times not used for: {name}')
 
                                         # for ei, e in enumerate(cam_ttls.values):
                                         #     harp_dis_min = (session_TD['Harp_time'] - e).abs().idxmin()
@@ -410,12 +418,21 @@ class Main:
                             assert len(dlc_dfs) == len(animal_pupil_dfs)
                             for ri,dlc_df in enumerate(dlc_dfs):
                                 animal_pupil = animal_pupil_dfs[ri]
+                                animal_pupil = animal_pupil.dropna()
+                                if dlc_df.shape[0] != animal_pupil.shape[0]:
+                                    if dlc_df.shape[0] - animal_pupil.shape[0] < 5:
+                                        animal_pupil = animal_pupil.iloc[:dlc_df.shape[0],:]
+                                    else:
+                                        logger.warning(f'many missing frames. skipping {name}')
+                                        continue
                                 dlc_ell = utils.get_dlc_diams(dlc_df,animal_pupil.shape[0],scorer)
                                 dlc_colnames = ['dlc_radii_a','dlc_radii_b','dlc_centre_x',
                                                 'dlc_centre_y','dlc_EW','dlc_LR']
                                 for colname,coldata in zip(dlc_colnames,dlc_ell):
                                     try:animal_pupil[colname] = coldata
-                                    except ValueError: logger.warning(f'uneven data arrays: {name}')
+                                    except ValueError:
+                                        logger.warning(f'uneven data arrays: {name}')
+                                        continue
                                 animal_pupil['dlc_area'] = (animal_pupil['dlc_radii_a']*animal_pupil['dlc_radii_b']).apply(lambda x: x*math.pi)
                                 animal_pupil['dlc_radii_ab'] = (animal_pupil['dlc_radii_a']+animal_pupil['dlc_radii_b'])/2
 
@@ -551,7 +568,7 @@ if __name__ == "__main__":
     aligned_dir = f'aligned_{task}'
     run = Main(humans,humandates,os.path.join(r'c:\bonsai\gd_analysis\pickles',pklname),tdatadir,r'W:\humanpsychophysics\HumanXDetection\Data',
                pdata_topic,fs,han_size=1,passband=bandpass_met,aligneddir=aligned_dir,subjecttype='human',
-               overwrite=False,dlc_snapshot=[1750000,1300000],lowtype=lowtype,do_zscore=do_zscore,
+               overwrite=False,dlc_snapshot=[1750000,1300000],lowtype=lowtype,do_zscore=do_zscore,redo=config['sess_to_redo'],
                preprocess_pklname=os.path.join(r'c:\bonsai\gd_analysis\pickles', f'human_fam.pkl'))
     run.load_pdata()
     # plt.plot(run.data['Human21_220316'].pupildf['rawarea_zscored'])
