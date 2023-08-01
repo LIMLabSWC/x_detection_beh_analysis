@@ -21,7 +21,7 @@ dates2process:
  - '230303'
 
 protocol: 'fam'
-animals2process: ['DO50','DO51','DO52','DO53','DO54','DO55','DO56','DO57','DO58']
+animals2process: []
 preprocess_pkl: '/ceph/akrami/Dammy/mouse_pupillometry/pickles/mouse_fam_oldbatch.pkl'
 pkl_dir: '/ceph/akrami/Dammy/mouse_pupillometry/pickles'
 do_zscore: true
