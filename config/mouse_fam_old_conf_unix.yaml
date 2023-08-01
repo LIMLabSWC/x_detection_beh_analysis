@@ -1,7 +1,7 @@
-pdatadir: 'W:\mouse_pupillometry\mouse_hf'
-tdatadir: 'c:\bonsai\data\Dammy'
+pdatadir: '/ceph/akrami/Dammy/mouse_pupillometry/mouse_hf/'
+tdatadir: '/nfs/nhome/live/aonih/data/Dammy'
 dirstyle: 'N_D_it'
-os: windows
+os: unix
 
 dates2process:
  - '221214'
@@ -20,13 +20,14 @@ dates2process:
  - '230301'
  - '230303'
 
+protocol: 'fam'
 animals2process: []
-preprocess_pkl: 'mouse_fam_preprocessed.pkl'
-pkl_dir: 'X:\Dammy\mouse_pupillometry\pickles'
+preprocess_pkl: '/ceph/akrami/Dammy/mouse_pupillometry/pickles/mouse_fam_oldbatch.pkl'
+pkl_dir: '/ceph/akrami/Dammy/mouse_pupillometry/pickles'
 do_zscore: true
-bandpass_met: [0.0, 4]
+bandpass_met: [0.125,4]
 han_size: 0.15
 fs: 90.0
 pdata_topic: 'pupildata_2d'
 use_TTL: true
-protocol: 'fam'
+sess_to_redo: ['']

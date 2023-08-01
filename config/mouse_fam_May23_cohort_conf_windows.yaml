@@ -30,3 +30,4 @@ han_size: 0.15
 fs: 90.0
 pdata_topic: 'pupildata_2d'
 use_TTL: true
+sess_to_redo: []
