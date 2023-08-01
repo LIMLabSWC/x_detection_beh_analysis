@@ -255,10 +255,10 @@ class Main:
             # self.read_and_proccess(session,self.sessions[session])
         for sess_name, result in zip(self.sessions, self.pool_results):
             self.data[sess_name].trialData = self.sessions[sess_name]
-            self.data[sess_name].pupil_df = result
+            self.data[sess_name].pupildf = result
 
         # logger.debug(f' data keys{self.data.keys()}')
-        # logger.debug(f'pdf  = {self.data[list(self.data.keys())[0]].pupil_df.shape}')
+        # logger.debug(f'pdf  = {self.data[list(self.data.keys())[0]].pupildf.shape}')
         with open(self.pklname, 'wb') as pklfile:
             logger.info(f'Saving {self.pklname}')
             pickle.dump(self.data, pklfile)
