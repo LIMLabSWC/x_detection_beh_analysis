@@ -55,6 +55,7 @@ class Main:
                  protocol='default',use_ttl=False):
 
         # load trial data
+        self.pool_results = None
         daterange = [sorted(date_list)[0], sorted(date_list)[-1]]
         self.trial_data = utils.merge_sessions(tdatadir,names,'TrialData',daterange)
         self.trial_data = pd.concat(self.trial_data,sort=False,axis=0)
@@ -245,19 +246,24 @@ class Main:
                     session_TD.set_index('Trial_Start_dt', append=True, inplace=True)
                 name = f'{animal}_{date}'
                 self.sessions[name] = session_TD
-        manager = multiprocessing.Manager()
-        self.data = manager.dict(self.data)
+                self.data[name] = pupilDataClass(animal)
+        # manager = multiprocessing.Manager()
+        # self.data = manager.dict(self.data)
         with multiprocessing.Pool() as pool:
-            pool.map(self.read_and_proccess,self.sessions.keys())
+            self.pool_results = pool.map(self.read_and_proccess,self.sessions.keys())
             # for session in self.sessions:
             # self.read_and_proccess(session,self.sessions[session])
-        logger.debug(f' data keys{self.data.keys()}')
-        logger.debug(f'pdf  = {self.data[list(self.data.keys())[0]].pupildf.shape}')
+        for sess_name, result in zip(self.sessions, self.pool_results):
+            self.data[sess_name].trialData = self.sessions[sess_name]
+            self.data[sess_name].pupil_df = result
+
+        # logger.debug(f' data keys{self.data.keys()}')
+        # logger.debug(f'pdf  = {self.data[list(self.data.keys())[0]].pupil_df.shape}')
         with open(self.pklname, 'wb') as pklfile:
             logger.info(f'Saving {self.pklname}')
             pickle.dump(self.data, pklfile)
-        with open(self.preprocessed_pklname, 'wb') as pklfile:
-            pickle.dump(self.preprocessed, pklfile)
+        # with open(self.preprocessed_pklname, 'wb') as pklfile:
+        #     pickle.dump(self.preprocessed, pklfile)
 
     def read_and_proccess(self,name:str):
 
@@ -532,12 +538,12 @@ class Main:
 
             self.data[name].pupildf = pd.concat(animal_pupil_processed_dfs,axis=0)
             self.data[name].trialData = self.trial_data.loc[animal, date].copy()  # add session trialdata
-            if 'Stage' not in self.data[name].trialData.columns:
-                if 'fam' in self.pklname:
-                    self.data[name].trialData['Stage'] = np.full_like(self.data[name].trialData.index.to_series(), 3)
-                else:
-                    self.data[name].trialData['Stage'] = np.full_like(self.data[name].trialData.index.to_series(), 4)
-
+            # if 'Stage' not in self.data[name].trialData.columns:
+            #     if 'fam' in self.pklname:
+            #         self.data[name].trialData['Stage'] = np.full_like(self.data[name].trialData.index.to_series(), 3)
+            #     else:
+            #         self.data[name].trialData['Stage'] = np.full_like(self.data[name].trialData.index.to_series(), 4)
+            return self.data[name].pupildf
             # while has_handle(self.pklname):
             #     time.sleep(0.01)
             # if self.pklname is not None:
