@@ -245,11 +245,14 @@ class Main:
                     session_TD.set_index('Trial_Start_dt', append=True, inplace=True)
                 name = f'{animal}_{date}'
                 self.sessions[name] = session_TD
+        manager = multiprocessing.Manager()
+        self.data = manager.dict(self.data)
         with multiprocessing.Pool() as pool:
             pool.map(self.read_and_proccess,self.sessions.keys())
             # for session in self.sessions:
             # self.read_and_proccess(session,self.sessions[session])
-
+        logger.debug(f' data keys{self.data.keys()}')
+        logger.debug(f'pdf  = {self.data[list(self.data.keys())[0]].pupildf.shape}')
         with open(self.pklname, 'wb') as pklfile:
             logger.info(f'Saving {self.pklname}')
             pickle.dump(self.data, pklfile)
