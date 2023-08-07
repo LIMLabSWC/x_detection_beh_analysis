@@ -262,8 +262,8 @@ class Main:
         with open(self.pklname, 'wb') as pklfile:
             logger.info(f'Saving {self.pklname}')
             pickle.dump(self.data, pklfile)
-        # with open(self.preprocessed_pklname, 'wb') as pklfile:
-        #     pickle.dump(self.preprocessed, pklfile)
+        with open(self.preprocessed_pklname, 'wb') as pklfile:
+            pickle.dump(self.preprocessed, pklfile)
 
     def read_and_proccess(self,name:str):
 
@@ -543,7 +543,7 @@ class Main:
             #         self.data[name].trialData['Stage'] = np.full_like(self.data[name].trialData.index.to_series(), 3)
             #     else:
             #         self.data[name].trialData['Stage'] = np.full_like(self.data[name].trialData.index.to_series(), 4)
-            return self.data[name].pupildf
+            return self.data[name].pupildf  #, self.preprocessed[name]
             # while has_handle(self.pklname):
             #     time.sleep(0.01)
             # if self.pklname is not None:

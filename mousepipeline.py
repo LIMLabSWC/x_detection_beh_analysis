@@ -36,7 +36,7 @@ if __name__ == "__main__":
     )
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_file', default=Path('config','mouse_fam_conf_windows.yaml'))
+    parser.add_argument('--config_file', default=Path('config','mouse_fam_old_conf_unix.yaml'))
     parser.add_argument('-date', default=None)
     args = parser.parse_args()
 
@@ -118,7 +118,7 @@ if __name__ == "__main__":
     # pklname = r'mouse_fm_fam_2d_90Hz_hpass00_hanning025_detrend.pkl'
     # preprocess_pkl =f'{pkl_prefix}_fam_w_LR_noTTL.pkl'
 
-    run = Main(animals2process, dates2process,Path(config['pkl_dir'], pklname), tdatadir,
+    run = Main(animals2process, dates2process,(Path(config['pkl_dir'])/ pklname), tdatadir,
                pdatadir, pdata_topic, fs, han_size=han_size, passband=bandpass_met, aligneddir=aligneddir,
                subjecttype='mouse', dlc_snapshot=[2450000, 1300000], overwrite= True, do_zscore=do_zscore,
                lowtype=lowtype, dirstyle=dirstyle, dlc_filtflag=True, redo=config['sess_to_redo'],

@@ -31,7 +31,7 @@ if __name__ == "__main__":
     pmetric2use = ['diameter_2d_zscored','dlc_radii_a_zscored','dlc_EW_zscored','dlc_radii_a_processed','dlc_EW_processed']
 
     for sess in run.data:
-        run.data[sess].trialData['Offset'] = run.data[sess].trialData['Offset'].astype(float) + 1.0
+        run.data[sess].trialData['Offset'] = run.data[sess].trialData['Offset'].astype(float) + 0.0
     do_baseline = True  # 'rawsize' not in pkl2use
     if 'normdev' in paradigm:
         run.add_pretone_dt()
@@ -70,7 +70,7 @@ if __name__ == "__main__":
 
         aligned_pklfile = r'pickles\normdev_2305cohort_aligned.pkl'
         # aligned_pklfile = r'pickles\DO54_62_aligned_notrend.pkl'
-        aligned_ow = True
+        aligned_ow = False
         if os.path.isfile(aligned_pklfile) and not aligned_ow:
             with open(aligned_pklfile,'rb') as pklfile:
                 run.aligned = pickle.load(pklfile)
@@ -170,8 +170,14 @@ if __name__ == "__main__":
 
     normdev_tsplot_bysess = plt.subplots(nrows=2,ncols=2,figsize=(50, 35))
     plots = plot_traces(run.labels, ['230719','230728'], run.aligned['normdev'], run.duration, run.samplerate,
-                        cmap_flag=True, cond_subset=[1],binsize=5,binskip=3)
+                        cmap_flag=True, cond_subset=[1],binsize=5,binskip=1,control_idx=0)
     utils.unique_legend([plots[0], plots[1]])
+    for event_ax in plots[1].flatten():
+        event_ax.axvspan(0, 0 + 0.125, edgecolor='k', facecolor='k', alpha=0.1)
+        event_ax.axvspan(0.25, 0.25 + 0.125, edgecolor='k', facecolor='k', alpha=0.1)
+        event_ax.axvspan(0.5, 0.50 + 0.125, edgecolor='k', facecolor='k', alpha=0.1)
+        event_ax.axvspan(0.75, 0.75 + 0.125, edgecolor='k', facecolor='k', alpha=0.1)
+    plots[0].set_size_inches(18, 15)
     plots[0].show()
     normdev_tsplot_byanimal = plt.subplots(len(run.labels),squeeze=False,sharey='all')
     dates2plot = ['230728']
@@ -179,7 +185,7 @@ if __name__ == "__main__":
         get_subset(run,run.aligned,'normdev', {'date': dates2plot,'name':animal},
                    events=list_cond_filts['normdev'][1],
                    beh=f'{align_pnts[0]} onset', plttitle='Response to Pattern onset across conditions',
-                   plttype='ts', ntrials=[1000,10],
+                   plttype='ts', ntrials=[1000,1000],
                    ylabel='zscored pupil size', xlabel=f'Time since Pattern Onset (s)',
                    pltaxis=(normdev_tsplot_byanimal[0],normdev_tsplot_byanimal[1][ai,0]), exclude_idx=[None],
                    )

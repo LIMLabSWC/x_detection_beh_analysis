@@ -15,6 +15,9 @@ dates2process:
  - '230721'
  - '230727'
  - '230728' # normdev
+ - '230802'
+ - '230803'
+ - '230804' # normdev 5 10 5 15
 
 protocol: 'normdev'
 animals2process: ['DO65','DO66', 'DO67','DO68']

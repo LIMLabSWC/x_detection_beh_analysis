@@ -233,7 +233,7 @@ def get_subset(dataclass, dataclass_dict, cond_name, filters=(None,), events=Non
         return aligned_subset_fig,aligned_subset_ax, aligned_subset
 
 
-def plot_traces(iter1, iter2, data, dur, fs, control_idx=0, cond_subset=None, cmap_name='RdBu_r', binsize=0, binskip=1,
+def plot_traces(iter1, iter2, data, dur, fs, control_idx=None, cond_subset=None, cmap_name='RdBu_r', binsize=0, binskip=1,
                 cmpap_lbls=('start', 'end'),pltax=None, cmap_flag=True,linealpha=0.5,
                 plotformatdict=None):
     lines = ["--", "-.", ":", "-"]
@@ -283,7 +283,7 @@ def plot_traces(iter1, iter2, data, dur, fs, control_idx=0, cond_subset=None, cm
                     else:
                         linecol = 'lightgrey'
                     axes[i1][i2].plot(x_ts,row, c=linecol, ls=lines[si % len(lines)],alpha=linealpha,label=f'{e1} {e2}')
-            if control_idx:
+            if control_idx != None:
                 control_df = working_dfs[control_idx].loc[:, e1, e2]
                 axes[i1][i2].plot(x_ts,control_df.mean(axis=0), c='k')
             axes[i1][i2].axvline(0, c='k', ls='--')

@@ -91,7 +91,7 @@ def get_dt(timeArray):
 	if isinstance(timeArray,np.ndarray):
 		return np.mean((np.roll(timeArray,-1) - timeArray)[1:-1])
 	elif isinstance(timeArray,pd.Series):
-		return timeArray.diff().mean().total_seconds()
+		return timeArray.diff().median().total_seconds()
 
 
 
@@ -448,6 +448,8 @@ Returns:
 def interpolateArray(dataArray, timeArray, gapExtension = 0.2):
 	
 	interpolatedDataArray = dataArray.copy()
+	if get_dt(timeArray) < 0.0:
+		print('nan dt')
 	jump_dist = int(gapExtension / get_dt(timeArray)) #interpolates between gapExtension seconds before and after the points where it they fell to zero
 
 	print("Interpolating missing values: ", end="")
@@ -691,6 +693,7 @@ Usually nothing, see individual functions.
 class pupilDataClass():
 
 	def __init__(self,name):
+		self.pupil_df = None
 		self.name = name
 
 	def loadData(self, defaultMachine='EL',eye='right'):

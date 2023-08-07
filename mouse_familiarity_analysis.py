@@ -27,7 +27,7 @@ if __name__ == "__main__":
     pkldir = r'X:\Dammy\mouse_pupillometry\pickles'
     pkl2use = os.path.join(pkldir,'mouse_hf_fam_2d_90Hz_hpass00_lpass4hanning015_TOM.pkl')
 
-    run = Main(pkl2use, (-1.0, 3.0), figdir=rf'W:\mouse_pupillometry\figures\mouse_2305mice_fam',fig_ow=False)
+    run = Main(pkl2use, (-1.0, 3.0), figdir=rf'mouse_hf_fam_2d_90Hz_hpass00_lpass4hanning015_TOM_rawsize.pkl',fig_ow=False)
     run_oldmice = Main(r'W:\mouse_pupillometry\pickles\mouse_hf_fam3_2d_90Hz_lpass4_hpass00_hanning025_TOM_w_LR_detrend_wTTL_.pkl',
                        (-1.0, 3.0), figdir=rf'W:\mouse_pupillometry\figures\mouse_2305mice_fam',fig_ow=False)
     pmetric2use = ['diameter_2d_zscored','dlc_radii_a_zscored','dlc_EW_zscored','dlc_EW_normed']
@@ -77,7 +77,7 @@ if __name__ == "__main__":
 
         aligned_pklfile = r'pickles\fm_fam_aligned_nohpass.pkl'
         # aligned_pklfile = r'pickles\DO54_62_aligned_notrend.pkl'
-        aligned_ow = False
+        aligned_ow = True
         conditions_class = utils.PupilEventConditions()
         list_cond_filts = conditions_class.all_filts
         if os.path.isfile(aligned_pklfile) and aligned_ow is False:
@@ -185,6 +185,8 @@ if __name__ == "__main__":
             '230719',  # muscimol day 2 0.5 uL dose (64,69,70)
             '230720',
             '230721',
+            '230724',
+            '230725',
             ]
         p_rate_tsplots = plt.subplots(figsize=(9,7))
 
@@ -215,7 +217,7 @@ if __name__ == "__main__":
         prate_multiple_dates_plot = plt.subplots(ncols=ncols,nrows=math.ceil(len(prate_example_dates)/ncols),
                                                  figsize=(9*4,21),sharey='all',squeeze=False)
         for di,date2plot in enumerate(prate_example_dates):
-            prate_aligned = get_subset(run, run.aligned, 'p_rate', {'date': date2plot}, events=list_cond_filts['p_rate'][1],
+            prate_aligned = get_subset(run, run.aligned, 'p_rate_local', {'date': date2plot}, events=list_cond_filts['p_rate_local'][1],
                                        beh=f'{align_pnts[0]} onset',
                                        plttitle=f'Response to pattern onset {date2plot}', plttype='ts',
                                        ylabel='zscored pupil size', xlabel=f'Time since pattern onset (s)',
