@@ -30,6 +30,8 @@ if __name__ == "__main__":
     run = Main(pkl2use, (-1.0, 5.0), figdir=rf'W:\mouse_pupillometry\figures\mouse_normdev',fig_ow=False)
     pmetric2use = ['diameter_2d_zscored','dlc_radii_a_zscored','dlc_EW_zscored','dlc_radii_a_processed','dlc_EW_processed']
 
+    run.td_obj = TDAnalysis(r'c:\bonsai\data\Dammy', run.labels, (run.dates[0],run.dates[-1]))
+
     for sess in run.data:
         run.data[sess].trialData['Offset'] = run.data[sess].trialData['Offset'].astype(float) + 0.0
     do_baseline = True  # 'rawsize' not in pkl2use
@@ -45,7 +47,7 @@ if __name__ == "__main__":
         # dates2plot = ['230126','230127','230206','230207']
         # dates2plot = ['230306','230307','230308','230310']  # new normdev 0.1 rate
         # dates2plot = ['230317']
-        dates2plot = ['230719','230728']
+        dates2plot = ['230719','230728','230804']
         # dates2plot=run.dates
         animals2plot=run.labels
         stages=[4]
@@ -70,7 +72,7 @@ if __name__ == "__main__":
 
         aligned_pklfile = r'pickles\normdev_2305cohort_aligned.pkl'
         # aligned_pklfile = r'pickles\DO54_62_aligned_notrend.pkl'
-        aligned_ow = False
+        aligned_ow = True
         if os.path.isfile(aligned_pklfile) and not aligned_ow:
             with open(aligned_pklfile,'rb') as pklfile:
                 run.aligned = pickle.load(pklfile)
@@ -169,8 +171,8 @@ if __name__ == "__main__":
     normdev_tsplot[0].show()
 
     normdev_tsplot_bysess = plt.subplots(nrows=2,ncols=2,figsize=(50, 35))
-    plots = plot_traces(run.labels, ['230719','230728'], run.aligned['normdev'], run.duration, run.samplerate,
-                        cmap_flag=True, cond_subset=[1],binsize=5,binskip=1,control_idx=0)
+    plots = plot_traces(run.labels, ['230719','230728','230804'], run.aligned['normdev'], run.duration, run.samplerate,
+                        cmap_flag=True, cond_subset=[],binsize=5,binskip=1,control_idx=0)
     utils.unique_legend([plots[0], plots[1]])
     for event_ax in plots[1].flatten():
         event_ax.axvspan(0, 0 + 0.125, edgecolor='k', facecolor='k', alpha=0.1)
@@ -180,7 +182,7 @@ if __name__ == "__main__":
     plots[0].set_size_inches(18, 15)
     plots[0].show()
     normdev_tsplot_byanimal = plt.subplots(len(run.labels),squeeze=False,sharey='all')
-    dates2plot = ['230728']
+    dates2plot = ['230804']
     for ai, animal in enumerate(run.labels):
         get_subset(run,run.aligned,'normdev', {'date': dates2plot,'name':animal},
                    events=list_cond_filts['normdev'][1],

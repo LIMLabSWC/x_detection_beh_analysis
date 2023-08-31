@@ -28,8 +28,8 @@ if __name__ == "__main__":
     pkl2use = os.path.join(pkldir,'mouse_hf_fam_2d_90Hz_hpass00_lpass4hanning015_TOM.pkl')
 
     run = Main(pkl2use, (-1.0, 3.0), figdir=rf'mouse_hf_fam_2d_90Hz_hpass00_lpass4hanning015_TOM_rawsize.pkl',fig_ow=False)
-    run_oldmice = Main(r'W:\mouse_pupillometry\pickles\mouse_hf_fam3_2d_90Hz_lpass4_hpass00_hanning025_TOM_w_LR_detrend_wTTL_.pkl',
-                       (-1.0, 3.0), figdir=rf'W:\mouse_pupillometry\figures\mouse_2305mice_fam',fig_ow=False)
+    # run_oldmice = Main(r'W:\mouse_pupillometry\pickles\mouse_hf_fam3_2d_90Hz_lpass4_hpass00_hanning025_TOM_w_LR_detrend_wTTL_.pkl',
+    #                    (-1.0, 3.0), figdir=rf'W:\mouse_pupillometry\figures\mouse_2305mice_fam',fig_ow=False)
     pmetric2use = ['diameter_2d_zscored','dlc_radii_a_zscored','dlc_EW_zscored','dlc_EW_normed']
 
     do_baseline = True  # 'rawsize' not in pkl2use
@@ -80,6 +80,9 @@ if __name__ == "__main__":
         aligned_ow = True
         conditions_class = utils.PupilEventConditions()
         list_cond_filts = conditions_class.all_filts
+        for sess in run.data:
+            run.data[sess].trialData['Offset'] = run.data[sess].trialData['Offset'].astype(float) + 1.0
+
         if os.path.isfile(aligned_pklfile) and aligned_ow is False:
             with open(aligned_pklfile,'rb') as pklfile:
                 run.aligned = pickle.load(pklfile)
@@ -91,8 +94,6 @@ if __name__ == "__main__":
         with open(aligned_pklfile, 'wb') as pklfile:
             pickle.dump(run.aligned,pklfile)
 
-        # for sess in run.data:
-        #     run.data[sess].trialData['Offset'] = run.data[sess].trialData['Offset'].astype(float) + 1.0
 
         run.aligned['alt_rand_nocontrol'] = copy(run.aligned['alt_rand'])
         run.aligned['alt_rand_nocontrol'][2].pop(2)
