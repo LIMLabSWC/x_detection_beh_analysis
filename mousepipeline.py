@@ -16,6 +16,7 @@ from loguru import logger
 from rich.logging import RichHandler
 from pyinspect import install_traceback
 import argparse
+import platform
 
 
 if __name__ == "__main__":
@@ -39,14 +40,15 @@ if __name__ == "__main__":
     parser.add_argument('--config_file', default=Path('config','mouse_fam_old_conf_unix.yaml'))
     parser.add_argument('-date', default=None)
     args = parser.parse_args()
+    os = platform.system().lower()
 
     with open(args.config_file, 'r') as file:
         config = yaml.safe_load(file)
 
     logger.info('loaded config')
 
-    tdatadir = Path(config['tdatadir'])
-    pdatadir = Path(config['pdatadir'])
+    tdatadir = Path(config[f'tdatadir_{os}'])
+    pdatadir = Path(config[f'pdatadir_{os}'])
     assert tdatadir.is_dir() and pdatadir.is_dir()
 
     # pdatadir = r'W:\mouse_pupillometry\mousenormdev\aligned_mousenormdev_stage5'
@@ -113,16 +115,16 @@ if __name__ == "__main__":
     pdata_topic = config['pdata_topic']
     han_size_str = f'hanning{str(han_size).replace(".","")}'*bool(han_size)
 
-    pklname = f'{pkl_prefix}_{config["protocol"]}_{pdata_topic.split("_")[1]}_{int(fs)}Hz_hpass{str(bandpass_met[0]).replace(".", "")}_lpass{str(bandpass_met[1]).replace(".", "")}' \
+    pklname = f'{pkl_prefix}_{config["pklname_suffix"]}_{config["protocol"]}_{pdata_topic.split("_")[1]}_{int(fs)}Hz_hpass{str(bandpass_met[0]).replace(".", "")}_lpass{str(bandpass_met[1]).replace(".", "")}' \
               f'{han_size_str}_TOM{"_rawsize" * (not do_zscore)}.pkl'
     # pklname = r'mouse_fm_fam_2d_90Hz_hpass00_hanning025_detrend.pkl'
     # preprocess_pkl =f'{pkl_prefix}_fam_w_LR_noTTL.pkl'
 
-    run = Main(animals2process, dates2process,(Path(config['pkl_dir'])/ pklname), tdatadir,
+    run = Main(animals2process, dates2process,(Path(config[f'pkl_dir_{os}'])/ pklname), tdatadir,
                pdatadir, pdata_topic, fs, han_size=han_size, passband=bandpass_met, aligneddir=aligneddir,
                subjecttype='mouse', dlc_snapshot=[2450000, 1300000], overwrite= True, do_zscore=do_zscore,
                lowtype=lowtype, dirstyle=dirstyle, dlc_filtflag=True, redo=config['sess_to_redo'],
-               preprocess_pklname=Path(config['pkl_dir'], config['preprocess_pkl']),use_ttl=config['use_TTL'],
-               protocol='probreward')
+               preprocess_pklname=Path(config[f'pkl_dir_{os}'], config[f'preprocess_pkl']),use_ttl=config['use_TTL'],
+               protocol=config['protocol'],use_canny_ell=config['use_canny_ell'])
     logger.info('Main class initialised')
     run.load_pdata()

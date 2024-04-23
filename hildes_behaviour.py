@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 from collections import OrderedDict
 from matplotlib import pyplot as plt
 import matplotlib as mpl
+
+import align_functions
 import analysis_utils as utils
 import pylab
 from sklearn import linear_model
@@ -39,7 +41,7 @@ class TDAnalysis:
             pass
         self.animals = animal_list
         self.anon_animals = [f'Animal {i}' for i in range(len(self.animals))]  # give animals anon labels
-        self.dates = sorted(self.trial_data.loc[self.animals].index.to_frame()['Date'].unique())
+        self.dates = sorted(self.trial_data.loc[self.animals].index.to_frame()['date'].unique())
 
         # add datetime cols
         for col in self.trial_data.keys():
@@ -59,16 +61,16 @@ class TDAnalysis:
             for date in self.dates:
                 try:
                     statnames = ['Trials Done', 'NonViol Trials', 'Early Rate', 'Error Rate']
-                    data_day = utils.filter_df(self.trial_data.loc[animal, date], filters)
+                    data_day = align_functions.filter_df(self.trial_data.loc[animal, date], filters)
                     trials_done_day = data_day.shape[0]
-                    correct_trials = utils.filter_df(data_day, ['a1']).shape[0]
+                    correct_trials = align_functions.filter_df(data_day, ['a1']).shape[0]
                     try:
-                        early_rate = utils.filter_df(data_day, ['a2']).shape[0] / trials_done_day
+                        early_rate = align_functions.filter_df(data_day, ['a2']).shape[0] / trials_done_day
                     except ZeroDivisionError:
                         early_rate = 1
                     try:
-                        error_rate = utils.filter_df(data_day, ['a0']).shape[0] / \
-                                     utils.filter_df(data_day, ['a3']).shape[0]
+                        error_rate = align_functions.filter_df(data_day, ['a0']).shape[0] / \
+                                     align_functions.filter_df(data_day, ['a3']).shape[0]
                     except ZeroDivisionError:
                         error_rate = 1
                     stats_day = pd.DataFrame([[trials_done_day, correct_trials, early_rate, error_rate]],
@@ -126,11 +128,11 @@ class TDAnalysis:
             for date in self.dates:
                 try:
                     data_day = self.trial_data.loc[animal, date]
-                    warm_up_df = utils.filter_df(data_day, ['b0'])
-                    main_df = utils.filter_df(data_day, ['b1'])
+                    warm_up_df = align_functions.filter_df(data_day, ['b0'])
+                    main_df = align_functions.filter_df(data_day, ['b1'])
                     try:
-                        correct_rate_wu = utils.filter_df(warm_up_df, ['a1']).shape[0] / warm_up_df.shape[0]
-                        correct_rate_main = utils.filter_df(main_df, ['a1']).shape[0] / main_df.shape[0]
+                        correct_rate_wu = align_functions.filter_df(warm_up_df, ['a1']).shape[0] / warm_up_df.shape[0]
+                        correct_rate_main = align_functions.filter_df(main_df, ['a1']).shape[0] / main_df.shape[0]
                     except ZeroDivisionError:
                         correct_rate_wu = np.nan
                         correct_rate_main = np.nan
@@ -202,13 +204,13 @@ class TDAnalysis:
 
             for date in self.dates:
                 if self.animal == 'mouse':
-                    if (utils.filter_df(data,['b1'])['ToneTime_dt'] != datetime.strptime('00:00:00','%H:%M:%S')).any():
+                    if (align_functions.filter_df(data, ['b1'])['ToneTime_dt'] != datetime.strptime('00:00:00', '%H:%M:%S')).any():
                         #or if human
                         try:
-                            pattern_trials = utils.filter_df(data.loc[date], ['e!0',stage]).shape[0]
-                            success_pattern = utils.filter_df(data.loc[date], ['a1', 'e!0',stage]).shape[0]
-                            none_trials = utils.filter_df(data.loc[date], ['e=0',stage]).shape[0]
-                            success_none = utils.filter_df(data.loc[date], ['a1', 'e=0',stage]).shape[0]
+                            pattern_trials = align_functions.filter_df(data.loc[date], ['e!0', stage]).shape[0]
+                            success_pattern = align_functions.filter_df(data.loc[date], ['a1', 'e!0', stage]).shape[0]
+                            none_trials = align_functions.filter_df(data.loc[date], ['e=0', stage]).shape[0]
+                            success_none = align_functions.filter_df(data.loc[date], ['a1', 'e=0', stage]).shape[0]
                             all_trials = pattern_trials+none_trials
                             try:
                                 p_success_if = success_pattern / pattern_trials
@@ -289,11 +291,11 @@ class TDAnalysis:
                             day_data['Session'][starts_more1hr[ix-1]:newsess] = chr(ord('a')+ix)
                             day_data['Session'][newsess:] = chr(ord('a')+ix +1)
 
-                    n_trial_a = utils.filter_df(day_data,['sess_a']).shape[0]
-                    n_trial_b = utils.filter_df(day_data, ['sess_b']).shape[0]
+                    n_trial_a = align_functions.filter_df(day_data, ['sess_a']).shape[0]
+                    n_trial_b = align_functions.filter_df(day_data, ['sess_b']).shape[0]
                     try:
-                        first.append(utils.filter_df(day_data, ['sess_a', 'a1']).shape[0] / n_trial_a) #could add the rate to the data points in the plot by making another list
-                        second.append(utils.filter_df(day_data, ['sess_b', 'a1']).shape[0] / n_trial_b)
+                        first.append(align_functions.filter_df(day_data, ['sess_a', 'a1']).shape[0] / n_trial_a) #could add the rate to the data points in the plot by making another list
+                        second.append(align_functions.filter_df(day_data, ['sess_b', 'a1']).shape[0] / n_trial_b)
                         # first.append(utils.filter_df(day_data, ['sess_a', 'a1']).shape[0])
                         # second.append(utils.filter_df(day_data, ['sess_b', 'a1']).shape[0])
                     except ZeroDivisionError or IndexError:
@@ -302,7 +304,7 @@ class TDAnalysis:
                 except KeyError:
                     print(date, animal, '- date missing')
             dict[animal] = {'a': first, 'b': second}
-        #plotting
+        #plotting_notebooks
         fig, axes = plt.subplots(2,2)
         x_names = ['a', 'b']
         for i, ax in enumerate(axes.flat):
@@ -332,11 +334,11 @@ class TDAnalysis:
         color = c_map(np.random.choice(range(0, 9), 4, replace=False))
         data = self.trial_data
         if self.animal == 'mouse':
-            df = pd.DataFrame(utils.filter_df(self.trial_data, ['b1','e!0'])) # only need main-sess trials where pattern is presented
-            df2 = pd.DataFrame(utils.filter_df(self.trial_data, ['b1','e=0']))
+            df = pd.DataFrame(align_functions.filter_df(self.trial_data, ['b1', 'e!0'])) # only need main-sess trials where pattern is presented
+            df2 = pd.DataFrame(align_functions.filter_df(self.trial_data, ['b1', 'e=0']))
         if self.animal =='human':
-            df = pd.DataFrame(utils.filter_df(self.trial_data, ['e!0']))  # only need trials where pattern is presented
-            df2 = pd.DataFrame(utils.filter_df(self.trial_data, ['e=0']))  # main-sess trials where pattern is not presented
+            df = pd.DataFrame(align_functions.filter_df(self.trial_data, ['e!0']))  # only need trials where pattern is presented
+            df2 = pd.DataFrame(align_functions.filter_df(self.trial_data, ['e=0']))  # main-sess trials where pattern is not presented
         #df2 = data2.drop(columns=['Stim1_Amplitude', 'GoTone_Amplitude', "WarmUp", "RewardTone_Time", "Gap_Time", 'ToneTime', 'Trial_End', 'Trial_Start'])
         #df['Trial_Outcome'].replace(-1,0, inplace=True)
         #df2['Trial_Outcome'].replace(-1, 0, inplace=True)
@@ -408,7 +410,7 @@ class TDAnalysis:
             plt.ylabel('Proportion trials')
 
         """
-        #axes = pd.plotting.scatter_matrix(df, alpha=0.2)
+        #axes = pd.plotting_notebooks.scatter_matrix(df, alpha=0.2)
         #plt.tight_layout()
 
         #sns.catplot(x='Trial_Outcome', y='PostTone_Duration',  data=df)
@@ -425,9 +427,9 @@ class TDAnalysis:
                 total_none_list = []
                 total_pattern_list = []
                 for i in durations:
-                    success_pattern = utils.filter_df(animal_df.loc[animal_df['PostTone_Duration'] == i], ['a1']).shape[0]
+                    success_pattern = align_functions.filter_df(animal_df.loc[animal_df['PostTone_Duration'] == i], ['a1']).shape[0]
                     total_pattern = (animal_df.loc[animal_df['PostTone_Duration'] == i]).shape[0]
-                    success_none = utils.filter_df(animal_df2.loc[animal_df2['PostTone_Duration'] == i], ['a1']).shape[0]
+                    success_none = align_functions.filter_df(animal_df2.loc[animal_df2['PostTone_Duration'] == i], ['a1']).shape[0]
                     total_none = (animal_df2.loc[animal_df2['PostTone_Duration'] == i]).shape[0]
                     rate_value_pattern.append(success_pattern/total_pattern)
                     rate_value_none.append(success_none/total_none)

@@ -1,17 +1,18 @@
 import pandas as pd
 import numpy as np
-import os
 from copy import deepcopy as copy
-import time
-from datetime import datetime, timedelta
 from collections import OrderedDict
+# mpl.use('TkAgg')
 from matplotlib import pyplot as plt
+
+import align_functions
 import analysis_utils as utils
-import pylab
-from sklearn.linear_model import LinearRegression
-from math import floor,ceil
-import scipy.signal
 import psychophysicsUtils
+import yaml
+import argparse
+from pathlib import Path
+import platform
+from tqdm import tqdm
 
 
 class TDAnalysis:
@@ -20,7 +21,6 @@ class TDAnalysis:
     """
 
     def __init__(self, tdatadir, animal_list, daterange,):
-        plt.style.use("seaborn-white")
         self.trialData = utils.merge_sessions(tdatadir, animal_list, 'TrialData', daterange)
         self.trialData = pd.concat(self.trialData, sort=False, axis=0)
         try:
@@ -29,11 +29,11 @@ class TDAnalysis:
             pass
         self.animals = animal_list
         self.anon_animals = [f'Animal {i}' for i in range(len(self.animals))]  # give animals anon labels
-        self.dates = sorted(self.trialData.loc[self.animals].index.to_frame()['Date'].unique())
+        self.dates = sorted(self.trialData.loc[self.animals].index.to_frame()['date'].unique())
 
         # add datetime cols
         self.add_dt_cols2sesstd(['Trial_Start','Trial_End','Time','ToneTime','Gap_Time','RewardTone_Time'])
-        self.trialData.set_index('Trial_Start_dt', append=True, inplace=True)
+        self.trialData.set_index('Trial_Start_dt', append=True, inplace=True, drop=False)
 
             #
             # if col.find('Time') != -1 or col.find('Start') != -1 or col.find('End') != -1:
@@ -55,19 +55,19 @@ class TDAnalysis:
             stats_dict[animal] = dict()  # dictionary to hold daily stats
             for date in self.dates:
                 try:
-                    statnames = ['Trials Done', 'NonViol Trials', 'Early Rate', 'Error Rate']
-                    data_day = utils.filter_df(self.trialData.loc[animal, date], filters)
+                    statnames = ['Trials Done', 'Correct Trials', 'Error Rate']  #'Early Rate'
+                    data_day = align_functions.filter_df(self.trialData.loc[[animal], [date],:], filters)
                     trials_done_day = data_day.shape[0]
-                    correct_trials = utils.filter_df(data_day, ['a1']).shape[0]
+                    correct_trials = align_functions.filter_df(data_day, ['a1']).shape[0]
                     try:
-                        early_rate = utils.filter_df(data_day, ['a2']).shape[0] / trials_done_day
+                        early_rate = align_functions.filter_df(data_day, ['a2']).shape[0] / trials_done_day
                     except ZeroDivisionError:
                         early_rate = 1
                     try:
-                        error_rate = utils.filter_df(data_day, ['a0']).shape[0] / utils.filter_df(data_day, ['a3']).shape[0]
+                        error_rate = align_functions.filter_df(data_day, ['a0']).shape[0] / align_functions.filter_df(data_day, ['a3']).shape[0]
                     except ZeroDivisionError:
                         error_rate = 1
-                    stats_day = pd.DataFrame([[trials_done_day, correct_trials, early_rate, error_rate]], columns=statnames)
+                    stats_day = pd.DataFrame([[trials_done_day, correct_trials, error_rate]], columns=statnames)
                     stats_dict[animal][date] = stats_day
                 except KeyError:
                     print('date missing')
@@ -76,7 +76,7 @@ class TDAnalysis:
         if plot:
             for i, animal in enumerate(self.animals):
                 for id, d in enumerate(sorted(stats_dict[animal].keys())):
-                    print(d)
+                    # print(d)
                     for f, feature in enumerate(stats_dict[animal][d]):
                         if i == 0:
                             ax[f].scatter(self.dates,np.full_like(self.dates,0),facecolors='none',edgecolor='none',s=15)
@@ -121,93 +121,7 @@ class TDAnalysis:
         for idx in self.trialData.index.unique():
             sess_name = '_'.join(idx)
             self.data[sess_name] = psychophysicsUtils.pupilDataClass
-            self.data[sess_name].trialData = copy.deepcopy(self.trialData.loc[idx])
-
-    def get_aligned_events(self, eventname, harp_event, window, timeshift=0.0, harp_event_name='Lick',
-                           animals=None,animals_omit=None,dates=None,dates_omit=None,plot=True,lfilt=None,
-                           byoutcome_flag=False,outcome2filt=None,extra_filts=None,plotcol=None):
-
-        if animals is None:
-            animals = self.animals
-        if dates is None:
-            dates = self.dates
-        if dates_omit:
-            [dates.remove(e) for e in dates_omit]
-        if animals_omit:
-            [animals.remove(e) for e in animals_omit]
-
-        fig,axes = plt.subplots(1,len(animals),figsize=(20,10))
-
-        if plot:
-            all_sess_eventz_list = []
-            for i, (ax,animal) in enumerate(zip(axes,animals)):
-                animal_cnt = 0
-                for d,date in enumerate(dates):
-                    sess_name = f'{animal}_{date}'
-                    # sess_mat = copy(utils.align_nonpuil(self.data[sess_name].trialData[eventname],
-                    #                                self.data[sess_name].harpmatrices[harp_event], window,timeshift))
-                    if date not in self.trialData.index.get_level_values('Date'):
-                        # print('Date not in trialdata, skipping')
-                        continue
-
-                    td2use = self.trialData.loc[animal,date,:]
-                    if outcome2filt:
-                        if extra_filts:
-                            filts2use = outcome2filt+extra_filts
-                        else:
-                            filts2use = outcome2filt
-                        td2use = utils.filter_df(td2use,filts2use)
-                    try:sess_mat = copy.deepcopy(utils.align_nonpuil(td2use[eventname],
-                                                                 self.harpmatrices[sess_name][harp_event], window,
-                                                                 self.trialData.loc[(animal,date)]['Offset'],
-                                                                 timeshift))
-                    except KeyError:continue
-                    sess_mat
-                    byoutcome_ser = self.trialData.loc[(animal,date)]['Trial_Outcome']
-                    fs = 0.001
-                    all_sess_eventz =pd.DataFrame(np.full((len(sess_mat),int((window[1]-window[0])/fs)),0.0))
-                    all_sess_eventz.columns = np.linspace(window[0],window[1],all_sess_eventz.shape[1]).round(3)
-                    # axes[i].set_axisbelow(True)
-                    # axes[i].yaxis.grid(color='gray', linestyle='dashed',which='both')
-                    for e, event in enumerate(sess_mat):
-                        axes[i].axhline(animal_cnt-e,c='k',linewidth=.25,alpha=0.25,)
-                        epoch_events = np.full(int((window[1]-window[0])/fs)+1,0.0)
-
-                        # print(list(sess_mat.values())[0])
-                        event=copy.deepcopy(event)
-                        eventz = sess_mat[event].round(3)
-
-                        epoch_events[((sess_mat[event]-window[0])/fs).astype(int)] = 1
-                        all_sess_eventz.loc[e,eventz] = 1
-                        epoch_events = all_sess_eventz.loc[e,:].to_numpy()
-
-                        if lfilt:
-                            epoch_events = utils.butter_filter(epoch_events, lfilt, 1 / fs, filtype='low')
-                            # b,a = s
-                        epoch_events[epoch_events==0] = np.nan
-                        if byoutcome_flag:
-                            if plotcol is None:
-                                plotcol = int(td2use["Trial_Outcome"][e])
-                            axes[i].scatter(all_sess_eventz.columns, epoch_events*(animal_cnt-e),
-                                            c=f'C{plotcol}', marker='x',s=3,alpha=1,linewidth=.5)
-                        else:
-                            axes[i].scatter(all_sess_eventz.columns, epoch_events*(animal_cnt-e), c=f'C{d}', marker='.')
-                        axes[i].axvline(0, ls='--', c='k')
-                        # axes[i].axvline(0.5, ls='--', c='grey')
-                    # ax.axhline(animal_cnt+20,ls='-',c='k')
-                    animal_cnt -= len(sess_mat)
-                    if outcome2filt:
-                        condname=outcome2filt[0].replace('a0','Non Rewarded')
-                        condname=condname.replace('a1','Rewarded')
-                    else:
-                        condname = 'all'
-                    axes[i].set_title(f'{harp_event_name} aligned to {eventname.replace("dt","").replace("_", " ").replace("Gap","X")}\n'
-                                      f'{animal}, {condname} trials',size=10)
-                    axes[i].set_yticks([])
-
-                    all_sess_eventz.index = td2use.index
-                    all_sess_eventz_list.append(all_sess_eventz)
-        return fig,axes,pd.concat(all_sess_eventz_list,axis=0)
+            self.data[sess_name].trialData = copy(self.trialData.loc[idx])
 
     def scatter_trial_metric_bysess(self,metric, dates=None, conditions=None, by_animal_flag=True, pointcloud_flag=True):
 
@@ -215,7 +129,7 @@ class TDAnalysis:
             dates = [dates]
         elif not dates:
             dates = self.dates
-        metric_series = utils.filter_df(self.trialData,['a1']).get(metric,None)
+        metric_series = align_functions.filter_df(self.trialData, ['a1']).get(metric, None)
         # if any(reaction_times):
         #     print('No "Reaction_time" column, Returning None')
         #     return None
@@ -226,7 +140,7 @@ class TDAnalysis:
         for date_i, date in enumerate(dates):
             sessions4dates = metric_series.loc[:,[date],:]
             if by_animal_flag:
-                animals4date = sorted(sessions4dates.index.get_level_values('Name').unique())
+                animals4date = sorted(sessions4dates.index.get_level_values('name').unique())
                 # animals4date = ['DO69']
                 metric_data_df = []
                 for animal in animals4date:
@@ -257,32 +171,49 @@ if __name__ == '__main__':
     plt.rcParams["figure.figsize"] = [8.00, 6.00]
     # plt.rcParams["figure.autolayout"] = True
 
-    datadir = r'C:\bonsai\data'
-    animals = [
-                'DO64',
-                'DO69',
-                'DO70'
-               ]
-    animals = [f'DO{i}' for i in range(54,59)]
+    parser = argparse.ArgumentParser()
+    parser.add_argument('config_file', default=Path('config', 'mouse_fam_old_conf_unix.yaml'))
+    args = parser.parse_args()
+
+    # animals = [
+    #             'DO64',
+    #             'DO69',
+    #             'DO70'
+    #            ]
+    # animals = [f'DO{i}' for i in range(54,59)]
     # dates = ['07/06/2023', '09/08/2023']  # start/end date for analysis
-    dates = ['02/02/2023', '03/03/2023']  # start/end date for analysis
-    td_obj = TDAnalysis(datadir,animals,dates)
+    # dates = ['02/02/2023', '03/03/2023']  # start/end date for analysis
 
-    plots = utils.plot_performance(td_obj.trialData, np.arange(7,13,1), animals, dates,['b','r','y'])
+    with open(args.config_file, 'r') as file:
+        config = yaml.safe_load(file)
 
-    reaction_time_plot = td_obj.scatter_trial_metric_bysess('Reaction_time',dates=['230607','230608','230609',
-                                                                                   '230717','230718','230719',
-                                                                                   '230720','230721','230724','230725'])
+    datadir = config[f'tdatadir_{platform.system().lower()}']
+
+    animals = config['animals2process']
+    dates = sorted(config['dates2process'])
+
+    td_obj = TDAnalysis(datadir,animals,(dates[0],dates[-1]))
+
+    plots = utils.plot_performance(td_obj.trialData, np.arange(7,13,1), animals, dates,['b','r','y','purple','cyan'])
+
+    # reaction_time_plot = td_obj.scatter_trial_metric_bysess('Reaction_time',dates=['230607','230608','230609',
+    #                                                                                '230717','230718','230719',
+    #                                                                                '230720','230721','230724','230725'])
+    reaction_time_plot = td_obj.scatter_trial_metric_bysess('Reaction_time',dates=dates)
     reaction_time_plot[1].set_ylabel('Reaction time (s)')
     reaction_time_plot[1].set_ylim(0.1, 1)
-    reaction_time_plot[1].set_xticklabels([])
+    reaction_time_plot[1].set_xticks(np.arange(len(dates)))
+    reaction_time_plot[1].set_xticklabels(dates,rotation=40)
     reaction_time_plot[0].show()
+    reaction_time_plot[1].set_title('Reaction time to X across sessions')
+    reaction_time_plot[0].set_constrained_layout('constrained')
+    reaction_time_plot[0].savefig(r'W:\mouse_pupillometry\figures\final_figs\muscimol_rt_all_sess.svg')
 
     early_licks_plot = td_obj.scatter_trial_metric_bysess('Early_Licks')
     early_licks_plot[0].show()
 
     eg_sess_scatterplot = plt.subplots()
-    eg_sess = td_obj.trialData.loc['DO56','230301',:]
+    eg_sess = td_obj.trialData.loc['DO64','230718',:]
 
     eg_sess_scatterplot[1].scatter(np.arange(eg_sess.shape[0]),eg_sess['Tone_Position']==0,marker='o',facecolor='white',
                                    edgecolor='grey')
@@ -300,6 +231,19 @@ if __name__ == '__main__':
     eg_sess_scatterplot[1].legend(loc=0,ncols=3)
     eg_sess_scatterplot[0].show()
 
+    td_obj.trialData['rounded_stim'] = np.full_like(td_obj.trialData.index, np.nan)
+    td2use = td_obj.trialData[td_obj.trialData['Tone_Position'] == 0]
+    td2use.loc[:,'rounded_stim'] = (td2use['ToneTime_dt']-td2use['Trial_Start_dt']).dt.total_seconds().round()
+    stim_dur_perf = [[td2use.loc[sess][td2use.loc[sess,'rounded_stim']==dur]['Trial_Outcome'].mean()
+                     for sess in tqdm(td2use.index.droplevel(2).unique())]
+                     for dur in sorted(td2use['rounded_stim'].unique()) if dur != np.nan]
+    stim_dur_boxplot = plt.subplots(figsize=(2.5,2.5))
+    stim_dur_boxplot[1].boxplot(stim_dur_perf[:4],labels=sorted(td2use['rounded_stim'].unique())[:4])
+    stim_dur_boxplot[1].tick_params(which='major',axis='both',labelsize=14)
+    stim_dur_boxplot[1].set_ylim(0.5,1.1)
+    stim_dur_boxplot[0].set_constrained_layout('constrained')
+    stim_dur_boxplot[0].show()
+    stim_dur_boxplot[0].savefig(r'X:\Dammy\final_figures\stim_dur_boxplot.svg')
 
     # # event raster
     # td_obj.add_data_dict()

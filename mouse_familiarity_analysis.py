@@ -1,10 +1,18 @@
+from matplotlib import cm,use
+
+import plotting_functions
+from align_functions import get_aligned_events
+
+use('TkAgg')
+
+import align_functions
+import pupil_analysis_func
+
 import math
 import time
-
-import matplotlib.colors
-from pupil_analysis_func import Main, get_fig_mosaic
+from pupil_analysis_func import Main
+from plotting_functions import get_fig_mosaic, plot_ts_var
 import matplotlib.pyplot as plt
-from matplotlib import cm
 import numpy as np
 import pandas as pd
 import os
@@ -24,10 +32,13 @@ if __name__ == "__main__":
     # paradigm = ['normdev']
     paradigm = ['familiarity']
     # pkldir = r'c:\bonsai\gd_analysis\pickles'
-    pkldir = r'X:\Dammy\mouse_pupillometry\pickles'
-    pkl2use = os.path.join(pkldir,'mouse_hf_fam_2d_90Hz_hpass00_lpass4hanning015_TOM.pkl')
+    # pkldir = r'X:\Dammy\mouse_pupillometry\pickles'
+    pkldir = r'D:\bonsai\offline_data'
+    # pkl2use = os.path.join(pkldir,'mouse_hf_2309_batch_w_canny_fam_2d_90Hz_hpass01_lpass4hanning015_TOM.pkl')
+    pkl2use = os.path.join(pkldir,'mouse_hf_2309_batch_w_canny_DEC_dates_fam_2d_90Hz_hpass01_lpass4hanning025_TOM.pkl')
+    # pkl2use = os.path.join(pkldir,'mouse_hf_fam_2d_90Hz_hpass00_lpass4hanning015_TOM.pkl')
 
-    run = Main(pkl2use, (-1.0, 3.0), figdir=rf'mouse_hf_fam_2d_90Hz_hpass00_lpass4hanning015_TOM_rawsize.pkl',fig_ow=False)
+    run = Main(pkl2use, (-1.0, 3.0), figdir=rf'figures',fig_ow=False)
     # run_oldmice = Main(r'W:\mouse_pupillometry\pickles\mouse_hf_fam3_2d_90Hz_lpass4_hpass00_hanning025_TOM_w_LR_detrend_wTTL_.pkl',
     #                    (-1.0, 3.0), figdir=rf'W:\mouse_pupillometry\figures\mouse_2305mice_fam',fig_ow=False)
     pmetric2use = ['diameter_2d_zscored','dlc_radii_a_zscored','dlc_EW_zscored','dlc_EW_normed']
@@ -72,16 +83,22 @@ if __name__ == "__main__":
 
         keys = []
 
-        condition_keys = ['p_rate', 'p_rate_ctrl', 'p_onset', 'alt_rand', 'alt_rand_ctrl', 'pat_nonpatt_2X', 'p_rate_fm',
-                          'p_rate_local']
+        # condition_keys = ['p_rate', 'p_onset', 'alt_rand',  'pat_nonpatt_2X',
+        #                   'p_rate_local']
+        condition_keys = ['p_rate','p_rate_local']
+        condition_keys_canny = [f'{e}_canny' for e in condition_keys]
 
-        aligned_pklfile = r'pickles\fm_fam_aligned_nohpass.pkl'
+        # aligned_pklfile = r'pickles\fm_fam_aligned_nohpass.pkl'
         # aligned_pklfile = r'pickles\DO54_62_aligned_notrend.pkl'
-        aligned_ow = True
-        conditions_class = utils.PupilEventConditions()
+        # aligned_pklfile = r'mouse_hf_2305_batch_no_canny_fam_hpass015.pkl'
+        # aligned_pklfile = r'mouse_hf_2309_batch_w_canny_fam_hpass01.pkl'
+        aligned_pklfile = r'mouse_hf_2309_batch_DEC_dates_w_canny_fam_hpass01_align.pkl'
+        # aligned_pklfile = r'C:\bonsai\gd_analysis\pickles\normdev_2305cohort_aligned.pkl'
+        aligned_ow = False
+        conditions_class = pupil_analysis_func.PupilEventConditions()
         list_cond_filts = conditions_class.all_filts
         for sess in run.data:
-            run.data[sess].trialData['Offset'] = run.data[sess].trialData['Offset'].astype(float) + 1.0
+            run.data[sess].trialData['Offset'] = run.data[sess].trialData['Offset'].astype(float) + 0.0
 
         if os.path.isfile(aligned_pklfile) and aligned_ow is False:
             with open(aligned_pklfile,'rb') as pklfile:
@@ -89,11 +106,12 @@ if __name__ == "__main__":
 
                 keys = [[e] for e in run.aligned.keys()]
         else:
-            conditions_class.get_condition_dict(run, condition_keys,stages,)  #'a1'
+            conditions_class.get_condition_dict(run, condition_keys,stages,)  # 'a1'
+            conditions_class.get_condition_dict(run, condition_keys, stages,
+                                                pmetric2use='canny_raddi_a_zscored', key_suffix='_canny')
 
-        with open(aligned_pklfile, 'wb') as pklfile:
-            pickle.dump(run.aligned,pklfile)
-
+        # with open(aligned_pklfile, 'wb') as pklfile:
+        #     pickle.dump(run.aligned,pklfile)
 
         run.aligned['alt_rand_nocontrol'] = copy(run.aligned['alt_rand'])
         run.aligned['alt_rand_nocontrol'][2].pop(2)
@@ -156,14 +174,14 @@ if __name__ == "__main__":
         # plot_tsdelta[1].set_xlabel('Time since Pattern Onset (s)')
         # plot_tsdelta[0].savefig(os.path.join(run.figdir,'deltacontrols_pupilts_patt_rate.svg'),bbox_inches='tight')
 
-        # pattern non pattern ananlysis
+        # pattern non pattern analysis
         pattnonpatt_tsplots = plt.subplots()
         get_subset(run, run.aligned, 'pat_nonpatt_2X', list_cond_filts['pat_nonpatt_2X'][1],
-                   list_cond_filts['pat_nonpatt_2X'][1], plttitle='Response to Pattern onset across conditions', plttype='ts',
-                   ylabel='zscored pupil size', xlabel=f'Time since Pattern start (s)',
+                   list_cond_filts['pat_nonpatt_2X'][1], plttitle='Response to X onset across conditions', plttype='ts',
+                   ylabel='zscored pupil size', xlabel=f'Time since X onset (s)',
                    pltaxis=pattnonpatt_tsplots
                    )
-        pattnonpatt_tsplots[0].set_size_inches(9,6)
+        pattnonpatt_tsplots[0].set_size_inches(9,7)
         pattnonpatt_tsplots[0].set_constrained_layout('constrained')
         pattnonpatt_tsplots[0].savefig(os.path.join(run.figdir,'patt_nonpatt_ts_allltrials.svg'),
                                        bbox_inches='tight')
@@ -172,51 +190,59 @@ if __name__ == "__main__":
 
         # prate analysis
         # p_rate_dates = ['230214', '230216', '230221', '230222', '230113', ]  # '230223', '230224'
-        p_rate_dates= [
-            '230531',
-            '230601',
-            '230602',
-            '230605',
-            '230606',
-            '230607',
-            '230608',   # muscimol day (64, 69)
-            '230609',
-            '230717',
-            '230718',
-            '230719',  # muscimol day 2 0.5 uL dose (64,69,70)
-            '230720',
-            '230721',
-            '230724',
-            '230725',
-            ]
+        # p_rate_dates= [
+        #     '230531',
+        #     '230601',
+        #     '230602',
+        #     '230605',
+        #     '230606',
+        #     '230607',
+        #     '230608',   # muscimol day (64, 69)
+        #     '230609',
+        #     '230717',
+        #     '230718',
+        #     '230719',  # muscimol day 2 0.5 uL dose (64,69,70)
+        #     '230720',
+        #     '230721',
+        #     '230724',
+        #     '230725',
+        #     '230804',  # muscimol 1 ul/ul
+        #     ]
+        plt.close('all')
+        p_rate_dates=run.dates
         p_rate_tsplots = plt.subplots(figsize=(9,7))
 
-        prate_aligned = get_subset(run,run.aligned,'p_rate',{'date':p_rate_dates}, events=list_cond_filts['p_rate'][1],
-                   beh=f'{align_pnts[0]} onset', plttitle='Response to Pattern onset across conditions', plttype='ts',
-                   ylabel='zscored pupil size', xlabel=f'Time since Pattern Onset (s)',
-                   pltaxis=p_rate_tsplots,exclude_idx=[None],ctrl_idx=3
-                   )
+        run.subsets['prate_rare_freq'] = get_subset(run,run.aligned,'p_rate_local',{'date':p_rate_dates}, events=list_cond_filts['p_rate_local'][1],
+                                                    beh=f'{align_pnts[0]} onset',
+                                                    plttitle='Response to Pattern onset across conditions',
+                                                    plttype='ts',
+                                                    ylabel='zscored pupil size', xlabel=f'Time since Pattern Onset (s)',
+                                                    pltaxis=p_rate_tsplots, exclude_idx=[1, 2, 3], ctrl_idx=3,
+                                                    alt_cond_names=['rare', 'frequent', 'none']
+                                                    )
         p_rate_tsplots[0].show()
-        utils.ts_permutation_test(prate_aligned[2],500,0.95,3,p_rate_tsplots,run.duration)
-        utils.ts_two_tailed_ht(prate_aligned[2],0.95,3,p_rate_tsplots,run.duration)
+        p_rate_tsplots[0].set_constrained_layout('constrained')
+
+        utils.ts_permutation_test(run.subsets['prate_rare_freq'][2],500,0.95,3,p_rate_tsplots,run.duration)
+        utils.ts_two_tailed_ht(run.subsets['prate_rare_freq'][2],0.95,3,p_rate_tsplots,run.duration)
         p_rate_tsplots[0].show()
 
         p_rate_over_dates_tsplot = plt.subplots(ncols=len(p_rate_dates),squeeze=False,sharey='all')
         for di,date in enumerate(p_rate_dates):
-            get_subset(run, run.aligned, 'p_rate', {'date': date}, events=list_cond_filts['p_rate'][1],
+            get_subset(run, run.aligned, 'p_rate_local_canny', {'date': date}, events=list_cond_filts['p_rate_local'][1],
                        beh=f'{align_pnts[0]} onset', plttitle='Response to Pattern onset across conditions',
                        plttype='ts',
                        ylabel='zscored pupil size', xlabel=f'Time since Pattern Onset (s)',
                        pltaxis=(p_rate_over_dates_tsplot[0],p_rate_over_dates_tsplot[1][0,di]),
                        exclude_idx=[None], ctrl_idx=3
                        )
-        p_rate_over_dates_tsplot[0].set_size_inches(16,7)
+        p_rate_over_dates_tsplot[0].set_size_inches(30,7)
         p_rate_over_dates_tsplot[0].show()
         # example multiple prate plots over dates
         prate_example_dates = p_rate_dates
-        ncols = 3
+        ncols = 4
         prate_multiple_dates_plot = plt.subplots(ncols=ncols,nrows=math.ceil(len(prate_example_dates)/ncols),
-                                                 figsize=(9*4,21),sharey='all',squeeze=False)
+                                                 figsize=(9*ncols,21),sharey='all',squeeze=False)
         for di,date2plot in enumerate(prate_example_dates):
             prate_aligned = get_subset(run, run.aligned, 'p_rate_local', {'date': date2plot}, events=list_cond_filts['p_rate_local'][1],
                                        beh=f'{align_pnts[0]} onset',
@@ -228,6 +254,142 @@ if __name__ == "__main__":
         prate_multiple_dates_plot[0].set_constrained_layout('constrained')
         prate_multiple_dates_plot[0].show()
 
+        # muscimol prate analysis
+        p_rate_dates=run.dates
+        prate_musc_tsplots = plt.subplots(ncols=2,squeeze=False,figsize=(9*3,7),sharey='all')
+        # prate_muscimol_dates = ['230608','230719','230804']
+        # prate_muscimol_dates = ['230918','230920','230927','230929','231002','231030','231103']
+        prate_muscimol_dates = ['230918','230920','230927','230929','231002','231030','231103',
+                                '231128','231201','231206']
+        # prate_saline_dates = ['230928','231024','231027','231102']
+        prate_saline_dates = ['230928','231024','231027','231102','231204']
+        prate_control_dates = [d for d in p_rate_dates if d not in prate_muscimol_dates+prate_saline_dates]
+        prate_control_dates = [d for d in prate_control_dates if all(int(d) - np.array(prate_muscimol_dates).astype(int) != -1)]
+        # prate_control_dates.remove('231031')
+        muscimol_analysis_dfs = []
+        for subset_ix, (subset_dates,subset_name) in enumerate(zip([prate_muscimol_dates,prate_control_dates,prate_saline_dates],
+                                                                   ['muscimol', 'control','saline'])):
+            run.subsets[f'{subset_name}_2patt'] = get_subset(run, run.aligned, 'p_rate_local_canny',{'date':subset_dates,'name':['DO71','DO72','DO75']},
+                                                             events=list_cond_filts['p_rate_local'][1],
+                                                             beh=f'{align_pnts[0]} onset',
+                                                             plttitle=f'Response to pattern onset {subset_name}',
+                                                             plttype='ts',
+                                                             ylabel='zscored pupil size',
+                                                             xlabel=f'Time since pattern onset (s)',
+                                                             exclude_idx=(1, 2, 3),
+                                                             alt_cond_names=['rare','frequent','none']
+                             # pltaxis=(prate_musc_tsplots[0],
+                             #          prate_musc_tsplots[1][0, subset_ix]),
+                             )
+            muscimol_analysis_dfs.append(run.subsets[f'{subset_name}_2patt'][2])
+
+        prate_musc_tsplots[0].show()
+
+        # sess_delta_plot = plt.subplots()
+        musc_sal_ctrl_tsplot = plt.subplots(figsize=(9,7))
+        rare_freq_delta_tsplot = plt.subplots(figsize=(9,7))
+        for cond_i, (cond_dfs,cond_name,ls) in enumerate(zip(muscimol_analysis_dfs,['muscimol','control',],['-','--',':'])):
+            rare_df, freq_df, none_df = copy(cond_dfs)
+            none_df.index = none_df.index.droplevel('time')
+            for df_i, (df,df_name) in enumerate(zip([rare_df,freq_df],['rare','frequent'])):
+                df.index = df.index.droplevel('time')
+                # for u_idx in df.index.unique():
+                    # df.loc[u_idx] = df.loc[u_idx] - none_df.loc[u_idx].median(axis=0)
+                musc_sal_ctrl_tsplot[1].plot(none_df.columns, df.mean(axis=0),
+                                             c=f'C{df_i}',ls=ls,label=f'{cond_name}: {df_name}')
+            delta_dfs = [rare_df.loc[u_idx].mean(axis=0)-freq_df.loc[u_idx].mean(axis=0) for u_idx in rare_df.index.unique() if u_idx in freq_df.index]
+            # delta_means = [(rare_df.loc[u_idx]-freq_df.loc[u_idx]).mean(axis=0) for u_idx in rare_df.index.unique() if u_idx in freq_df.index]
+            rare_freq_delta_tsplot[1].plot(none_df.columns, np.array(delta_dfs).mean(axis=0),
+                                           label=f'{cond_name}')
+            plot_ts_var(none_df.columns,np.array(delta_dfs),f'C{cond_i}',rare_freq_delta_tsplot[1])
+
+        rare_freq_delta_tsplot[0].show()
+
+        musc_sal_ctrl_tsplot[1].legend()
+        musc_sal_ctrl_tsplot[1].set_ylabel('zscored difference in pupil size from none trials')
+        musc_sal_ctrl_tsplot[1].set_xlabel('Time since pattern onset (s)')
+        musc_sal_ctrl_tsplot[1].axvline(0,c='k',ls='--')
+        musc_sal_ctrl_tsplot[0].set_constrained_layout('constrained')
+        musc_sal_ctrl_tsplot[0].show()
+
+        prate_musc_tsplots[0].set_size_inches(18, 7)
+        prate_musc_tsplots[0].show()
+        prate_musc_tsplots[1][0, 1].set_ylabel('')
+        prate_musc_tsplots[0].set_constrained_layout('constrained')
+
+        # plot rare/freq musc vs saline
+        reordered_trial_types = dict()
+        sess_subsets_dfs = [run.subsets[s_key][2] for s_key in
+                            ['muscimol_2patt', 'saline_2patt', 'non muscimol_2patt']]
+        for cond_i, cond in enumerate(['rare','frequent',]):
+            reordered_trial_types[cond] = []
+            for sess_type_i, sess_type in enumerate(['muscimol','saline','none']):
+                reordered_trial_types[cond].append(sess_subsets_dfs[sess_type_i][cond_i]-sess_subsets_dfs[sess_type_i][-1].mean(axis=0))
+            run.subsets[cond+'delta'] = None, None, reordered_trial_types[cond], ['muscimol','saline', 'control']
+
+        run.dump_trial_pupil_arr()
+
+
+        musc_nonmusc_2x_tsplot = plt.subplots()
+        pltargs = [['-',1],['--',1]]
+        for subset_ix, (subset_dates,subset_name) in enumerate(zip([prate_muscimol_dates,prate_control_dates],
+                                                                   ['muscimol', 'non muscimol'])):
+            get_subset(run, run.aligned, 'pat_nonpatt_2X_canny',{'date':subset_dates,'name':['DO71','DO72','DO75']},
+                       # events=list_cond_filts['p_rate_local'][1],
+                       events= [f'{e} {subset_name}' for e in list_cond_filts['pat_nonpatt_2X'][1]],
+                       beh=f'{align_pnts[2]} onset',
+                       plttitle=f'Response to X onset {subset_name}', plttype='ts',
+                       ylabel='zscored pupil size', xlabel=f'Time since pattern onset (s)',
+                       # exclude_idx=(1,2,3),
+                       pltargs=pltargs[subset_ix],
+                       pltaxis=musc_nonmusc_2x_tsplot,
+                       )
+        musc_nonmusc_2x_tsplot[0].set_size_inches(9,7)
+        musc_nonmusc_2x_tsplot[0].set_constrained_layout('constrained')
+        musc_nonmusc_2x_tsplot[0].show()
+
+
+
+
+
+
+        # bootstrap for n days:
+        n_bootstrap_repeats = 10
+        rand_subset_dates = [np.random.choice(prate_control_dates,len(prate_muscimol_dates), replace=True)
+                             for n in range(n_bootstrap_repeats)]
+        prate_rand_subset_tsplots = plt.subplots()
+        ts_traces_randsubsets = []
+
+        for subset_dates in rand_subset_dates:
+            subset_data = get_subset(run, run.aligned, 'p_rate_local', {'date': subset_dates},
+                       events=list_cond_filts['p_rate_local'][1],
+                       beh=f'{align_pnts[0]} onset',
+                       plttitle=f'Response to pattern onset (rand 3 day subsets)', plttype='ts',
+                       ylabel='zscored pupil size', xlabel=f'Time since pattern onset (s)',)[2]
+            subset_mean_traces = np.array([cond_traces.mean(axis=0) for cond_traces in subset_data])
+            ts_traces_randsubsets.append(subset_mean_traces)
+        all_subset_means = np.array(ts_traces_randsubsets)
+        # all_subset_means = all_subset_means.mean(axis=0)
+
+        ci = np.apply_along_axis(utils.mean_confidence_interval, axis=0, arr=all_subset_means)
+        # ci = np.apply_along_axis(manual_confidence_interval, axis=0, arr=rand_npdample)
+        # plot[1].plot(ci[0, :])
+        col_str = [f'C{i}' if ii != 'control' else 'k' for i,ii in enumerate(list_cond_filts['p_rate_local'][1]) ]
+        x_axis = run.aligned['p_rate_local'][2][0].columns
+        for cond_i,cond_name in enumerate(list_cond_filts['p_rate_local'][1]):
+            if cond_i not in [0,4,5,]:
+                continue
+            prate_rand_subset_tsplots[1].plot(x_axis,all_subset_means[:,cond_i,:].mean(axis=0),c=col_str[cond_i],label=cond_name)
+            prate_musc_tsplots[1][0,2].plot(x_axis,all_subset_means[:,cond_i,:].mean(axis=0),c=col_str[cond_i],label=cond_name)
+            prate_rand_subset_tsplots[1].fill_between(x_axis, ci[1,cond_i,:], ci[2,cond_i,:], alpha=0.1, facecolor=col_str[cond_i])
+            prate_musc_tsplots[1][0, 2].fill_between(x_axis, ci[1,cond_i,:], ci[2,cond_i,:], alpha=0.1, facecolor=col_str[cond_i])
+        prate_musc_tsplots[1][0, 2].set_title('Mean response for random 3 session subsets (100 shuffles) ')
+        prate_musc_tsplots[1][0, 2].set_xlabel('Time since pattern onset (s)')
+        utils.unique_legend((prate_musc_tsplots[0],prate_musc_tsplots[1][0, 2]))
+
+        prate_rand_subset_tsplots[0].show()
+        prate_musc_tsplots[0].set_constrained_layout('constrained')
+        prate_musc_tsplots[0].show()
         conditions_class.get_condition_dict(run_oldmice, ['p_rate'], stages, extra_filts=['a1'])
         old_vs_new_tsplot = plt.subplots(ncols=2,sharey='all')
         prate_aligned_old = get_subset(run_oldmice, run_oldmice.aligned, 'p_rate',{'date':['230214', '230216', '230221', '230222', '230113', ]},
@@ -249,7 +411,7 @@ if __name__ == "__main__":
         alt_sesses = []
         # get sessions with alternating pattern trials
         for sess in run.data:
-            altsess = utils.filter_df(run.data[sess].trialData, ['s1','a1','e!0'])
+            altsess = align_functions.filter_df(run.data[sess].trialData, ['s1', 'a1', 'e!0'])
             if altsess.shape[0] > 10:
                 alt_sesses.append(altsess)
                 alt_rand_sessnames.extend(altsess.index.to_series().unique())
@@ -373,7 +535,7 @@ if __name__ == "__main__":
                 if col.find('Wait') == -1 and col.find('dt') == -1 and col.find('Lick_Times') == -1 and col.find(
                         'Cross') == -1:
                     utils.add_datetimecol(run.trialData, col)
-        run.get_aligned_events = TDAnalysis.get_aligned_events
+        run.get_aligned_events = get_aligned_events
         run.trialData.set_index('Trial_Start_dt',append=True,inplace=True,drop=False)
         run.trialData['Pretone_end_dt'] = [tstart + timedelta(0, predur) for tstart, predur in
                                    zip(run.trialData['Trial_Start_dt'], run.trialData['PreTone_Duration'])]
@@ -383,7 +545,7 @@ if __name__ == "__main__":
             with open(harpmatrices_pkl, 'rb') as pklfile:
                 run.harpmatrices = pickle.load(pklfile)
         else:
-            run.harpmatrices = utils.get_event_matrix(run,run.data,r'W:\mouse_pupillometry\mouse_hf\harpbins',)
+            run.harpmatrices = align_functions.get_event_matrix(run, run.data, r'W:\mouse_pupillometry\mouse_hf\harpbins', )
             with open(harpmatrices_pkl, 'wb') as pklfile:
                 pickle.dump(run.harpmatrices,pklfile)
         fig,ax = plt.subplots()
@@ -408,8 +570,8 @@ if __name__ == "__main__":
         fig.savefig(r'W:\mouse_pupillometry\figures\probrewardplots\alldates_HF_lickrate_EW.svg',bbox_inches='tight')
 
         pattern_hist = plt.subplots()
-        p09_df = utils.filter_df(run.trialData, ['phigh', 'e!0']).loc[:,'230221',:]
-        p05_df = utils.filter_df(run.trialData, ['p0.5', 'e!0']).loc[:,'230221',:]
+        p09_df = align_functions.filter_df(run.trialData, ['phigh', 'e!0']).loc[:, '230221', :]
+        p05_df = align_functions.filter_df(run.trialData, ['p0.5', 'e!0']).loc[:, '230221', :]
         onset_times,onset_counts = np.unique([p05_df.PreTone_Duration.to_list() +
                                              p09_df.PreTone_Duration.to_list()], return_counts=True)
         pattern_hist[1].bar(onset_times, onset_counts/np.sum(onset_counts), align='center')

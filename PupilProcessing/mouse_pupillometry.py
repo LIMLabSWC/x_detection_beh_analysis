@@ -1,3 +1,4 @@
+import align_functions
 from psychophysicsUtils import *
 import analysis_utils as utils
 from datetime import datetime, time, timedelta
@@ -17,7 +18,7 @@ def add_datetimecol(df, colname, timefmt='%H:%M:%S.%f'):
 
 
 def align2event(df,pupiltrace, beh, dur, rate, filters=('a3','b1'), baseline=False,eventshift=0):
-    filtered_df = utils.filter_df(df,filters)
+    filtered_df = align_functions.filter_df(df, filters)
     dur = np.array(dur)
     eventpupil_arr = np.zeros((filtered_df.shape[0], int(np.abs(dur).sum() * rate)))
     for i, eventtime in enumerate(filtered_df[beh]):

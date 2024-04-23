@@ -36,8 +36,8 @@ def merge_sessions(datadir,animal_list,filestr_cond, datestr_format='%yy%mm%dd')
             for file in files:
                 if file.find(filestr_cond) != -1:
                     loaded_file = pd.read_csv(os.path.join(root,file), delimiter=',')
-                    if loaded_file['Name'][0] in animal_list:
-                        loaded_file.set_index(['Name','Date']).sort_index()
+                    if loaded_file['name'][0] in animal_list:
+                        loaded_file.set_index(['name','date']).sort_index()
                         file_df.append(copy(loaded_file))
 
         elif filestr_cond == 'TrialData':
@@ -53,9 +53,9 @@ def merge_sessions(datadir,animal_list,filestr_cond, datestr_format='%yy%mm%dd')
                             if len(loaded_file) >0:
                                 name_series = [animal_name] * loaded_file.shape[0]
                                 date_series = [session_date] * loaded_file.shape[0]
-                                loaded_file['Name'] = name_series
-                                loaded_file['Date'] = date_series
-                                loaded_file = loaded_file.set_index(['Name','Date']).sort_index()
+                                loaded_file['name'] = name_series
+                                loaded_file['date'] = date_series
+                                loaded_file = loaded_file.set_index(['name','date']).sort_index()
                                 file_df.append(loaded_file)
                         except pd.errors.EmptyDataError:
                             print('Empty data frame')
@@ -169,7 +169,7 @@ for trial in range(len(trialList)):
 # Stage 0
 
 fig =plt.subplot()
-sns.pointplot(data=trial_data.groupby(['Name','Date']).mean().reset_index(),x= 'Date',y='Trial_Outcome', hue = 'Name', palette = 'mako')
+sns.pointplot(data=trial_data.groupby(['name','date']).mean().reset_index(),x= 'date',y='Trial_Outcome', hue = 'name', palette = 'mako')
 #plt.axhline(y=0.5, c='0.5', linestyle = '--')
 sns.despine()
 plt.ylabel('Fraction correct')
@@ -185,7 +185,7 @@ fig.axes.xaxis.set_ticklabels([])
 # Stage 1 short tones
 #[trial_data.Stim1_Duration<0.5]
 fig = plt.subplot()
-sns.pointplot(data=trial_data[trial_data.Stim1_Duration <0.5].groupby(['Name','Date']).mean().reset_index(),x= 'Date',y='Trial_Outcome', hue = 'Name', palette = 'mako')
+sns.pointplot(data=trial_data[trial_data.Stim1_Duration <0.5].groupby(['name','date']).mean().reset_index(),x= 'date',y='Trial_Outcome', hue = 'name', palette = 'mako')
 #plt.axhline(y=0.5, c='0.5', linestyle = '--')
 plt.ylim(0,1.1)
 sns.despine()
@@ -200,7 +200,7 @@ plt.gca().legend_.remove()
 # Stage 1
 
 fig = plt.subplot()
-sns.pointplot(data=trial_data[trial_data.Trial_Outcome !=0].groupby(['Name','Date']).mean().reset_index(),x= 'Date',y='Trial_Outcome', hue = 'Name', palette = 'mako')
+sns.pointplot(data=trial_data[trial_data.Trial_Outcome !=0].groupby(['name','date']).mean().reset_index(),x= 'date',y='Trial_Outcome', hue = 'name', palette = 'mako')
 #plt.axhline(y=0.5, c='0.5', linestyle = '--')
 sns.despine()
 plt.ylabel('Fraction correct')
@@ -215,7 +215,7 @@ plt.gca().legend_.remove()
 # Stage 1 performance vs stim1 dur
 fig = plt.subplot()
  
-sns.scatterplot(data=trial_data[trial_data.WarmUp==False].groupby(['Name','Date']).mean().reset_index(),x= 'Stim1_Duration',y='Trial_Outcome', hue = 'Name', palette = 'mako')
+sns.scatterplot(data=trial_data[trial_data.WarmUp==False].groupby(['name','date']).mean().reset_index(),x= 'Stim1_Duration',y='Trial_Outcome', hue = 'name', palette = 'mako')
 #plt.axhline(y=0.5, c='0.5', linestyle = '--')
 sns.despine()
 plt.ylabel('Fraction correct')
@@ -229,7 +229,7 @@ plt.xlim(0,2.1)
 #%%
 #decrease in reward attempts over time
 fig = plt.subplot()
-sns.pointplot(data=trial_data[trial_data.Trial_Outcome !=0].groupby(['Name','Date']).mean().reset_index(),x= 'Date',y='Reward_Attempts', hue = 'Name', palette = 'mako')
+sns.pointplot(data=trial_data[trial_data.Trial_Outcome !=0].groupby(['name','date']).mean().reset_index(),x= 'date',y='Reward_Attempts', hue = 'name', palette = 'mako')
 #plt.axhline(y=0.5, c='0.5', linestyle = '--')
 sns.despine()
 plt.ylabel('Reward attempts')
@@ -242,7 +242,7 @@ fig.axes.xaxis.set_ticklabels([])
 #%% Final performance per side (L vs R) to show that antibias works 
 # mean across mice  
 fig = plt.subplot()
-sns.pointplot(data=trial_data.groupby(['RewardedSide','Date']).mean().reset_index(),x= 'Date',y='Trial_Outcome', hue = 'RewardedSide', palette = 'Set2')
+sns.pointplot(data=trial_data.groupby(['RewardedSide','date']).mean().reset_index(),x= 'date',y='Trial_Outcome', hue = 'RewardedSide', palette = 'Set2')
 sns.despine()
 plt.title('Mean % correct for L & R')
 plt.ylabel('Fraction correct')
@@ -251,12 +251,12 @@ plt.ylim(0,1)
 fig.axes.xaxis.set_ticklabels([])
 
 #%% choice ratio to show antibias
-Rcorr = trial_data.Trial_Outcome[trial_data.RewardedSide==1].groupby(['Name','Date']).mean()
-Lcorr = trial_data.Trial_Outcome[trial_data.RewardedSide==2].groupby(['Name','Date']).mean()
+Rcorr = trial_data.Trial_Outcome[trial_data.RewardedSide==1].groupby(['name','date']).mean()
+Lcorr = trial_data.Trial_Outcome[trial_data.RewardedSide==2].groupby(['name','date']).mean()
 prob_L = Rcorr/Lcorr
 
 fig = plt.subplot()
-sns.pointplot(data=prob_L.groupby(['Name','Date']).mean().reset_index(),x= 'Date',y='Trial_Outcome', hue = 'Name', palette = 'mako')
+sns.pointplot(data=prob_L.groupby(['name','date']).mean().reset_index(),x= 'date',y='Trial_Outcome', hue = 'name', palette = 'mako')
 plt.ylabel('Choice side ratio')
 sns.despine()
 fig.axes.xaxis.set_ticklabels([])

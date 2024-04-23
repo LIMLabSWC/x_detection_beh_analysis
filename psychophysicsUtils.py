@@ -23,7 +23,7 @@ import scipy.signal
 from copy import copy
 
 
-plt.style.use("seaborn-muted")
+# plt.style.use("seaborn-muted")
 # rcParams['figure.dpi']= 300
 # rcParams['axes.labelsize']=5
 # rcParams['axes.labelpad']=2
@@ -693,7 +693,10 @@ Usually nothing, see individual functions.
 class pupilDataClass():
 
 	def __init__(self,name):
-		self.pupil_df = None
+		self.yc = None
+		self.xc = None
+		self.pupilRegressed = None
+		self.pupildf = None
 		self.name = name
 
 	def loadData(self, defaultMachine='EL',eye='right'):
@@ -921,10 +924,10 @@ Parameters:
 • conditionsList: list of integers, corresponding to which conditions you want ot trigger
 • tstart: how many seconds after (negative for before) the alignEvent do you want to slice/plot
 • tend: until how many seconds after the alignEvent do yuo want to slice/plot
-• plotting dt: data will be uniformaly samplied to this frequncy for plotting
+• plotting_notebooks dt: data will be uniformaly samplied to this frequncy for plotting_notebooks
 Returns:
 	• array with apupilDiams for all statifying trials shape (n_valid_trials,len_pupil_range)
-	• a time array of the same size, shape (len_pupil_range) starting at tstart and ending at tend for plotting against 
+	• a time array of the same size, shape (len_pupil_range) starting at tstart and ending at tend for plotting_notebooks against 
 """
 def sliceAndAlign(data, alignEvent = 'toneStart', conditionsList=[], tstart = -2, tend = 5, dt = 0.02):
 
@@ -1069,7 +1072,7 @@ Plots pupil diamters and error bars averaged over all subjects in participant da
 Parameters: 
 • participant data: a dictionary of data for participants (each entry of the dictionary is an instance of the pupilDataClass, containing is essential contains pupil data, times, trial data and more)
 • align event: what event each trial are we aligning to 
-• tsart and tend for plotting 
+• tsart and tend for plotting_notebooks 
 • title for graph
 • test range: on what time range with significance tests be run
 • saveTitle: for saving pngs to file 

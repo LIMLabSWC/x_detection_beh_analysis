@@ -1,13 +1,15 @@
 import matplotlib.pyplot as plt
 
+import align_functions
 import analysis_utils as utils
-from analysis_utils import align_wrapper, plot_eventaligned
+from analysis_utils import plot_eventaligned
+from align_functions import align_wrapper
 import numpy as np
 import pandas as pd
 import os
 import pickle
 from datetime import datetime, timedelta
-from math import floor, ceil
+from math import ceil
 import matplotlib
 import matplotlib.colors
 import statsmodels.api as sm
@@ -15,10 +17,10 @@ import ruptures as rpt
 from copy import deepcopy as copy
 from itertools import product
 from functools import partial
-from scipy.signal import find_peaks, find_peaks_cwt
+from scipy.signal import find_peaks
+from pathlib import Path
+from tqdm import tqdm
 
-import glob
-import random
 
 # code for analysing pupil self.data
 
@@ -105,7 +107,7 @@ def batch_analysis(dataclass,dataclass_dict,stages,column,shifts,events,labels,p
 def get_subset(dataclass, dataclass_dict, cond_name, filters=(None,), events=None, beh='default',level2filt='date',drop=None,
                ntrials=None,ntrial_start_idx=None, plttype='ts', ylabel='Pupilsize',xlabel=None,plttitle=None,pltaxis=None,
                pltargs=(None,None),plotcols=None,pdr=False,pdelta_wind=(0,1),
-               exclude_idx=(None,),ctrl_idx=0):
+               exclude_idx=(None,),ctrl_idx=0, alt_cond_names=None, merge=(None,)):
     """
 
     :param dataclass:
@@ -155,7 +157,16 @@ def get_subset(dataclass, dataclass_dict, cond_name, filters=(None,), events=Non
         aligned_subset = []
         for aligned_df in aligned_tuple_no_empty:
             aligned_subset.append(aligned_df.loc[aligned_df.index[aligned_df.index.droplevel('time').isin(idx_combs)]])
-        aligned_subset = [df for df_i, df in enumerate(aligned_subset) if df_i not in exclude_idx]
+        #
+        # if merge:
+        #     [pd.concat([aligned_subset[idx] for idx in idx])for idxs in merge]
+        #     aligned_subset = [df for df_i, df in enumerate(aligned_subset)
+        #                       if df_i not in exclude_idx]
+        #
+        aligned_subset = [df for df_i, df in enumerate(aligned_subset)
+                                        if df_i not in exclude_idx]
+        events_subset = [cond_event for ei, cond_event in enumerate(events)
+                                        if ei not in exclude_idx]
 
         if ntrials:
             if isinstance(ntrials,int):
@@ -203,7 +214,7 @@ def get_subset(dataclass, dataclass_dict, cond_name, filters=(None,), events=Non
             for df in _pdr_subset:
                 assert np.all(df.to_numpy()>=0.0)
             aligned_subset = _pdr_subset
-        aligned_subset_fig,aligned_subset_ax = utils.plot_eventaligned(aligned_subset,events,dataclass.duration,
+        aligned_subset_fig,aligned_subset_ax = utils.plot_eventaligned(aligned_subset,events_subset,dataclass.duration,
                                                                        beh,plottype_flag=plttype,binflag=True,
                                                                        plotax=pltaxis,pltargs=pltargs,
                                                                        pdelta_wind=pdelta_wind,ctrl_idx=ctrl_idx,
@@ -230,7 +241,14 @@ def get_subset(dataclass, dataclass_dict, cond_name, filters=(None,), events=Non
             else:
                 print('path exists, not overwriting')
 
-        return aligned_subset_fig,aligned_subset_ax, aligned_subset
+        if not alt_cond_names:
+            alt_cond_names = events_subset
+        else:
+            if len(alt_cond_names) != len(events_subset):
+                alt_cond_names = [cond_event for ei, cond_event in enumerate(alt_cond_names)
+                                  if ei not in exclude_idx]
+
+        return aligned_subset_fig,aligned_subset_ax, aligned_subset, alt_cond_names
 
 
 def plot_traces(iter1, iter2, data, dur, fs, control_idx=None, cond_subset=None, cmap_name='RdBu_r', binsize=0, binskip=1,
@@ -381,34 +399,11 @@ def glm_from_baseline(traces: pd.DataFrame,dur,bseln_dur,ax):
 
     return glm
 
-def get_fig_mosaic(dates2plot):
-    fig_form = ''
-    n_cols = len(dates2plot)
-    izz = '0123456789abcdefghijklmnopqrstuvwxyz'
-
-
-    if n_cols == 4:
-        n_cols = 2
-    if n_cols <= 3:
-        n_cols = n_cols
-    else:
-        n_cols = 3
-
-    if len(dates2plot) > 1:
-        for di, d in enumerate(dates2plot):
-            fig_form += str(izz[di]) * 2
-        chunked_fig_form = [fig_form[i:i + n_cols * 2].center(n_cols * 2, '.') for i in
-                            range(0, len(fig_form), n_cols * 2)]
-        fig_form = '\n'.join(chunked_fig_form)
-    else:
-        chunked_fig_form = ['00']
-        fig_form = '00'
-
-    return fig_form, chunked_fig_form, n_cols, izz
 
 class Main:
 
     def __init__(self,pklfilename, duration_window=(-1,2),extra_steps=True,figdir=None,fig_ow=False):
+            self.subsets = {}
             plt.style.use("seaborn-white")
             with open(pklfilename,'rb') as pklfile:
                 self.data = pickle.load(pklfile)
@@ -421,6 +416,8 @@ class Main:
             for sess in self.data.copy():
                 if self.data[sess].trialData is None or self.data[sess].pupildf is None:
                     self.data.pop(sess)
+            for sess in self.data:
+                self.data[sess].trialData.index.set_names(['name','date'],level=[0,1],inplace=True)
 
             self.add_dt_cols2sesstd(['Trial_Start','Trial_End','Time','ToneTime','Gap_Time','RewardTone_Time'])
 
@@ -479,11 +476,32 @@ class Main:
                 offset_series = np.full_like(sess_td.index, 1.0)
             sess_td['Offset'] = offset_series
 
+    def add_session_block(self,block_num, idx=None):
+        for sess in self.data:
+            sess_td = self.data[sess].trialData
+            sess_td['Session_Block'] = np.full_like(sess_td.index,block_num)
+
+    def add_stage(self,stage, idx=None):
+        for sess in self.data:
+            sess_td = self.data[sess].trialData
+            sess_td['Stage'] = np.full_like(sess_td.index,stage)
+
     def add_pretone_dt(self):
         for sess in self.data:
             td_df = self.data[sess].trialData
             td_df['Pretone_end_dt'] = [tstart+timedelta(0,predur) for tstart, predur in
                                        zip(td_df['Trial_Start_dt'], td_df['PreTone_Duration'])]
+
+    def add_01_1st_flag(self):
+        for sess in self.data:
+            td_df = self.data[sess].trialData
+            if 3 not in td_df['Stage'].values:
+                td_df['01_first'] = np.full_like(td_df.index,-1)
+            elif 0.1 not in td_df['PatternPresentation_Rate'].values and 0.9 not in td_df['PatternPresentation_Rate'].values:
+                td_df['01_first'] = np.full_like(td_df.index,-1)
+            else:
+                pres_rates = [1 if e == 0.1 else 0 for e in td_df['PatternPresentation_Rate'] if e in [0.1, 0.9]]
+                td_df['01_first'] = np.full_like(td_df.index,pres_rates[0])
 
     def add_x_col(self):
         for sess in self.data:
@@ -522,14 +540,14 @@ class Main:
     def add_viol_diff(self):
         for sess in self.data:
             td_df = self.data[sess].trialData
-            normal_pattern = utils.filter_df(td_df,['e!0','d0','s2'])['PatternID'].unique()[-1]
+            normal_pattern = align_functions.filter_df(td_df, ['e!0', 'd0', 's2'])['PatternID'].unique()[-1]
             normal_pattern = np.array(normal_pattern.split(';'),dtype=int)
             td_df['C_tone_diff'] = td_df['PatternID'].apply(lambda e: (np.array(e.split(';'), dtype=int)
                                                                        - normal_pattern)[2])
             td_df['D_tone_diff'] = td_df['PatternID'].apply(lambda e: (np.array(e.split(';'), dtype=int)
                                                                        - normal_pattern)[3])
 
-    def get_aligned(self, filters, event_shift=(0.5,), align_col='ToneTime_dt', event='ToneTime', plot=True,
+    def get_aligned(self, filters, event_shift=(0.5,), align_col='ToneTime_dt', event='ToneTime', plot=False,
                     xlabel='', plotsess=False, plotlabels=('Normal', 'Deviant'), pdr=False, ax=None, plotcols=None,
                     use4pupil=False, animals=None, daterange=None, pmetric='dlc_area_zscored',baseline=True,
                     sep_cond_cntrl_flag=False):
@@ -801,255 +819,114 @@ class Main:
                                pltaxis=(tsplots_by_animal_ntrials[0], tsplots_by_animal_ntrials[1][ai, di]))
                     tsplots_by_animal_ntrials[1][ai, di].set_title('')
 
+    def dump_trial_pupil_arr(self,subset_save_dir='subset_pupil_arr'):
+        subset_save_dir = Path(subset_save_dir)
+        if not subset_save_dir.is_dir():
+            subset_save_dir.mkdir()
+
+        today_str = datetime.now().strftime('%y%m%d')
+        for subset in self.subsets:
+            dfs2dump =[]
+            filename = utils.unique_file_path(subset_save_dir/f'{subset}_{today_str}.h5')
+            subset_dfs = self.subsets[subset][2]
+            cond_names = self.subsets[subset][3]
+            if not cond_names:
+                cond_names = np.arange(len(subset_dfs))
+            for cond_i, (df,c_name) in enumerate(zip(subset_dfs,cond_names)):
+                # df = cond[2]
+                df = df.assign(condition=np.full_like(df.index,c_name)).set_index('condition', append=True)
+                df.index.reorder_levels(['condition','time','name','date'])
+                dfs2dump.append(df)
+            pd.DataFrame.to_hdf(pd.concat(dfs2dump,axis=0),filename,'df')
 
 
-if __name__ == "__main__":
-    # pkldir = r'W:\mouse_pupillometry\working_pickles'
-    pkldir = r'C:\bonsai\gd_analysis\pickles'
+class PupilEventConditions:
 
-    # pkl2use = r'pickles\human_familiarity_3d_200Hz_015Shan_driftcorr_hpass01.pkl'
-    # pkl2use = r'pickles\human_class1_3d_200Hz_015Shan_driftcorr_hpass01_no29.pkl'
-    # pkl2use = r'pickles\human_class1_3d_200Hz_015Shan_driftcorr_hpass01.pkl'
-    # pkl2use = r'pickles\human_class1_3d_200Hz_015Shan_driftcorr_hpass01.pkl'
-    # pkl2use = r'pickles\DO48_fam_2d_200Hz_015Shan_driftcorr_hpass01.pkl'
-    # pkl2use = r'pickles\mouse_normdev_2d_200Hz_015Shan_driftcorr_hpass04_wdlc.pkl'
-    # pkl2use = r'pickles\mouse_fam_2d_200Hz_015Shan_driftcorr_hpass04_wdlc.pkl'
-    # pkl2use = r'/Volumes/akrami/mouse_pupillometry/pickles/DO48_fam_3d_200Hz_015Shan_driftcorr_hpass01_wdlc.pkl'
+    def __init__(self):
+        fam_filts = {
+            'p_rate': [[['plow'], ['p0.5'], ['phigh'], ['none']],
+                       ['0.1', '0.5', '0.9', 'control']],
+            'p_rate_ctrl': [[['plow'], ['plow', 'none'], ['p0.5'], ['p0.5', 'none'], ['phigh'], ['phigh', 'none']],
+                            ['0.1', '0.1 cntrl', '0.5', '0.5 cntrl', '0.9', '0.9 cntrl', 'control']],
+            'p_onset': [[['dearly', 'p0.5'], ['dlate', 'p0.5'], ['dmid', 'p0.5']],
+                        ['Early Pattern', 'Late Pattern', 'Middle Presentation']],
+            # 'p0.5_block': [[['0.5_0','p0.5'], ['0.5_1','p0.5'], ['0.5_2','p0.5'], ['none']],
+            #                ['0.5 Block (0.0)', '0.5 Block 1 (0.1)', '0.5 Block 2 (0.9)', 'Control']],
+            'alt_rand': [[['s0', 'p0.5'], ['s1', 'p0.5'], ['none', 'p0.5']],
+                         ['0.5 Random', '0.5 Alternating', 'Control']],
+            'alt_rand_ctrl': [
+                [['s0', 'p0.5'], ['s0', 'none'], ['s1', 'p0.5'], ['s1', 'p0.5', 'none'], ['none', 'p0.5']],
+                ['0.5 Random', '0.5 Random ctrl', '0.5 Alternating', '0.5 Alternating ctrl', 'Control']],
+            # 'ntones': [[['p0.5','tones4'],['p0.5','tones3'],['p0.5','tones2'],['p0.5','tones1']],['ABCD', 'ABC','AB','A']],
+            # 'pat_nonpatt': [[['e!0'],['e=0']],['Pattern Sequence Trials','No Pattern Sequence Trials']],
+            'pat_nonpatt_2X': [[['e!0'], ['none']], ['Pattern Sequence Trials', 'No Pattern Sequence Trials']],
+            'p_rate_fm': [[['plow'], ['pmed'], ['phigh'], ['ppost'], ['none']],
+                          ['0.1', '0.5', '0.9', '0.6', 'control']],
 
-    # pkl2use = os.path.join(pkldir,'mouse_normdev_2d_90Hz_025Shan_driftcorr_hpass025_wdlc_TOM.pkl')
-    pkl2use = os.path.join(pkldir,'mouse_hf_2d_90Hz_6lpass_025hpass_wdlc_TOM_interpol_all_int02s_221121.pkl')
+            'p_rate_local': [[['local_rate_0.2','tones4','c0'],['local_rate_0.4','tones4','c0'],['local_rate_0.6','tones4','c0'],
+                              ['local_rate_0.8','tones4','c0'],['local_rate_1.0','tones4','c0'], ['none']],
+                             ['1st Q','2nd Q','3rd Q', '4th Q', '5th Q', 'control']],
 
+        }
+        normdev_filts = {
+            'normdev': [[['d0','tones4'], ['d!0','tones4']], ['Normal', 'Deviant']],
+            'normdev_newnorms': [[['d0','tones4'], ['d!0','tones4'], ['d-1','tones4']],
+                                 ['Normal', 'Deviant', 'New Normal']],
+            'pat_nonpatt_2X': [[['e!0','tones4'], ['none']], ['Pattern Sequence Trials', 'No Pattern Sequence Trials'],
+                               'Gap_Time'],
+            'normdev_2TS': [[['e!0', 'tones4'], ['none']],
+                            ['Pattern Sequence Trials', 'No Pattern Sequence Trials'], 'Trial_Start'],
+            'normdev_2X': [[['e!0', 'tones4'], ['none']],
+                            ['Pattern Sequence Trials', 'No Pattern Sequence Trials'], 'Gap_Time']
+        }
+        self.all_filts = {**fam_filts, **normdev_filts}
 
-    # pkl2use = r'pickles\mouse_fam_post_2d_90Hz_025Shan_driftcorr_nohpass_wdlc_TOM.pkl'
+    def get_condition_dict(self,dataclass,condition_keys,stages,pmetric2use='dlc_radii_a_zscored',
+                           do_baseline=True,extra_filts=(),key_suffix=''):
 
-    run = Main(pkl2use, (-1,3))
-    fig_subdir = 'interpol_all'
-    if not os.path.isdir(os.path.join(run.figdir, fig_subdir)):
-        os.mkdir(os.path.join(run.figdir, fig_subdir))
-        run.figdir = os.path.join(run.figdir, fig_subdir)
-
-    # paradigm = ['altvsrand','normdev']
-    # paradigm = ['normdev']
-    # paradigm = ['familiarity']
-    paradigm = ['familiarity','0.5_fam']
-    # pmetric2use = 'dlc_radii_a_zscored'
-    pmetric2use = 'dlc_EW_zscored'
-
-    # run.whitenoise_hit_miss = run.get_aligned([['a1'], ['a0']],
-    #                                           event='WhiteNoise',
-    #                                           event_shift=[0.0, 0.0],
-    #                                           plotlabels=['Hit', 'Miss'],
-    #                                           align_col='Gap_Time_dt', pmetric=pmetric2use, use4pupil=True)
-
-    if 'familiarity' in paradigm:  # analysis to run for familiarity paradigm
-        run.familiarity = run.get_aligned([['e!0','plow','tones4','a1'],['e!0','tones4','p0.5','a1'],
-                                           ['e!0','tones4','phigh','a1'], ['e=0','a1']],
-                                          event_shift=[0.0, 0.0, 0.0, 0.0],
-                                          event='ToneTime', xlabel='Time since pattern onset',
-                                          plotlabels=['0.1','0.5','0.9','control'], plotsess=False, pdr=False,
-                                          use4pupil=False,
-                                          pmetric=pmetric2use
-                                          )
-        run.familiarity = run.get_aligned([['e=0','phigh','a1'], ['e=0','a1']],
-                                          event_shift=[0.0,0.0], align_col='Gap_Time_dt',
-                                          event='White Noise', xlabel='Time since pattern onset',
-                                          plotlabels=['0.9','control'], plotsess=False, pdr=False,
-                                          use4pupil=False,
-                                          pmetric=pmetric2use
-                                          )
-        # run.fam_firsts = run.get_firsts(run.familiarity,8,['0.1','0.4','0.9','0.6','control'],'ToneTime')
-        shuffle = False
-        if shuffle:  # decide whether to shuffle
-            for i in range(5):
-                run.get_firsts(run.familiarity,8,['0.1','0.4','0.9','0.6','control'],'ToneTime',shuffle=True)
-
-        run.add_stage3_05_order()
-
-
-        # run.fam_firsts_pdr = run.get_firsts(run.familiarity,8,['0.1','0.4','0.9','0.6','control'],'ToneTime',pdr=True)
-        # run.fam_lasts_pdr = run.get_lasts(run.familiarity,8,['0.1','0.4','0.9','0.6','control'],'ToneTime',pdr=True)
-        # run.reward = run.get_aligned([['a1'],['a0']],event='Trial End',xlabel='Time since reward tones',
-        #                              plotlabels=['correct','incorrect'],align_col='Trial_End_dt',pdr=False)
-        # run.reward = run.get_aligned([['a1']],event='RewardTime',xlabel='Time since reward tones', viol_shift=[-0.0],
-        #                                  plotlabels=['correct'],align_col='RewardTone_Time_dt',pdr=True)
-        #run.fam_delta = run.get_pupil_delta(run.familiarity[2],['DO48'],['0.1','0.4','0.9','0.6','control'],window=[0,1])
-
-        run_ntones_analysis = True
-        if run_ntones_analysis:
-            fig= plt.figure()
-            ax1 = plt.subplot2grid(shape=(2, 3), loc=(0, 0), colspan=3)
-            ax2 = plt.subplot2grid(shape=(2, 3), loc=(1, 0), colspan=1)
-            ax3 = plt.subplot2grid(shape=(2, 3), loc=(1, 1), colspan=1,sharex=ax2, sharey=ax2)
-            ax4 = plt.subplot2grid(shape=(2, 3), loc=(1, 2), colspan=1,sharex=ax2, sharey=ax2)
-            run.ntone_ana = run.get_aligned([['e!0','tones4'],['e!0','tones3'],['e!0','tones2'],['e!0','tones1']],
-                                            [0.0,0.0,0.0,0.0],
-                                            event='Pattern Onset',xlabel='Time since Pattern onset', align_col='ToneTime_dt',
-                                            plotlabels=['ABCD','ABC','AB','A'],pdr=False,ax=[fig,ax1],use4pupil=True,
-                                            pmetric=pmetric2use)
-
-            for i, (tone_cond,offset,lbl,axis) in enumerate(zip(['tones3','tones2','tones1'],[0.75, 0.5, 0.25],['ABC','AB','A'],
-                                            [ax2,ax3,ax4])):
-                run.get_aligned([['e!0','tones4'],['e!0',tone_cond]],[0.0], align_col='ToneTime_dt',
-                            event=f'ABCD vs {lbl} tones played',xlabel=f'Time since {lbl[-1]} presentation',
-                            plotlabels=['ABCD',lbl],plotsess=False,pdr=False,ax=[fig,axis],plotcols=[f'C{0}',f'C{i+1}'],
-                            use4pupil=True,pmetric=pmetric2use)
-                axis.legend().remove()
-
-            fig.set_size_inches(7,7)
-            fig.set_tight_layout(True)
-
-    # pmetric2use = 'rawarea_zscored'
-    if 'normdev' in paradigm:
-
-        stages = [4,5]
-
-        column = 'ToneTime_dt'
-        shifts = [[0.0,'ToneTime'],[0.5,'Violation']]
-
-        # column = 'Gap_Time_dt'
-        # shifts = [[0.0,'Whitenoise']]
-
-        events = ['d0','d!0','none']
-        labels = ['Normal', 'Deviant','None']
-        # events = ['d0','d1','d2','d3','none']
-        # labels = ['Normal', 'AB_D','ABC_','AB__','None']
-        keys = []
-        pattern_types = []
-
-        run.normdev = {}
-        for s in stages:
-            for shift in shifts:
-                cond_name = f'stage{s}_{events}_{column}_{shift[0]}'
-                event_filters = []
-                for e in events:
-                    if e[0] == 'd':
-                        event_filters.append(['e!0', 's3', e, f'stage{s}','a1','tones4'])
-                    elif e == 'none':
-                        event_filters.append(['e=0', 's3', f'stage{s}','a1'])
-
-                run.normdev[cond_name] = run.get_aligned(event_filters, pmetric=pmetric2use,
-                                                         event_shift=[shift[0]]*len(event_filters), align_col=column,
-                                                         event=shift[1], xlabel=f'Time since {shift[1]}', pdr=False,
-                                                         plotlabels=labels[:len(event_filters)],use4pupil=True)
-                keys.append(cond_name)
-                run.normdev[cond_name][0].canvas.manager.set_window_title(cond_name)
-                fig_savename = f'{cond_name}_a.svg'
-                fig_path = os.path.join(run.figdir,fig_savename)
-                while os.path.exists(fig_path):
-                    file_suffix = os.path.splitext(fig_path)[0][-1]
-                    fig_path = f'{os.path.splitext(fig_path)[0][:-1]}' \
-                               f'{chr(ord(file_suffix)+1)}{os.path.splitext(fig_path)[1]}'
-                if not os.path.exists(fig_path):
-                    run.normdev[cond_name][0].savefig(fig_path)
-                else:
-                    print('path exists, not overwriting')
-
-        dates2plot = run.normdev[keys[0]][2][0].index.get_level_values('date').unique()
-        for ki,key in enumerate(keys):
-            for date2plot in list(dates2plot):
-                # get_subset(run, run.normdev, keys[ki], {'date': [date2plot]},
-                #            labels, f'{pmetric2use} time')
-                get_subset(run, run.normdev, keys[ki], {'date': [date2plot]},
-                           labels, f'{pmetric2use} time',ntrials=[None,10,10])
+        def get_mean_subtracted_traces(dataclass,suffix=''):
+            for key in ['p_rate_ctrl', 'alt_rand_ctrl']:
+                if key not in dataclass.aligned.keys():
+                    continue
+                dataclass.aligned[f'{key}_sub{suffix}'] = copy(dataclass.aligned[key])
+                for ti, tone_df in enumerate(dataclass.aligned[key][2]):
+                    if (ti % 2 == 0 or ti == 0) and ti < len(dataclass.aligned[key][2]) - 1:
+                        print(ti)
+                        control_tone_df = dataclass.aligned[key][2][ti + 1].copy()
+                        for sess_idx in tone_df.index.droplevel('time').unique():
+                            sess_ctrl_mean = control_tone_df.loc[:, [sess_idx[0]], [sess_idx[1]]].mean(axis=0)
+                            tone_df.loc[:, sess_idx[0], sess_idx[1]] = tone_df.loc[:, [sess_idx[0]],
+                                                                       [sess_idx[1]]] - sess_ctrl_mean
+                        # run.aligned[f'{key}_sub'][2][ti] = copy(tone_df)-run.aligned[key][2][ti+1].mean(axis=0)
+                        dataclass.aligned[f'{key}_sub{suffix}'][2][ti] = copy(tone_df)
+                for idx in [1, 2]:
+                    if idx < (len(dataclass.aligned[key][2])):
+                        dataclass.aligned[f'{key}_sub{suffix}'][2].pop(idx)
 
 
-            # get_subset(run, run.normdev, keys[0],{'name': run.labels},)
+        align_pnts = ['ToneTime', 'Reward', 'Gap_Time']
 
-        base_plt_title = 'Evolution of pupil response with successive X presentations'
-        animals2plot = run.labels
-        dates2plot = run.dates
-        animal_date_pltform = {'ylabel': 'z-scored pupil size',
-                               'xlabel': 'Time since "X"',
-                               'figtitle': base_plt_title,
-                               'rowtitles': animals2plot,
-                               'coltitles': dates2plot,
-                               }
-        binsize = 1
-        for i, cond in enumerate(labels):
-            animal_date_pltform['figtitle'] = f"{base_plt_title} binned {binsize} trials: {cond}"
-            # indvtraces_binned = plot_traces(animals2plot, dates2plot, run.normdev[keys[0]], run.duration,
-            #                                 run.samplerate,
-            #                                 plotformatdict=animal_date_pltform, binsize=binsize, cond_subset=[i], )
-            # indvtraces_binned[0].savefig(rf'W:\mouse_pupillometry\figures\probrewardplots\evolve{i}.svg',
-            #                              bbox_inches='tight')
+        if not hasattr(dataclass,'aligned'):
+            dataclass.aligned = {}
 
-        # run.normdev_13 = run.get_aligned([['e!0','s3','d0','tones4','stage5'],['e!0','s3','d4','tones4','stage5']],
-        #                                  event_shift=[0.0, 0.0], align_col='Pretone_end_dt',
-        #                                  event='ToneTime', xlabel='Time since pattern onset', pdr=False,)
-        # run.normdev_13[0].canvas.manager.set_window_title('Stage5normal_deviant_Viol')
-        #
-        # run.normdev_13_stage4 = run.get_aligned([['e!0','s3','d0','tones4','stage4','a1'],['e!0','s3','d4','tones4','stage4','a1']],
-        #                                  event_shift=[0.0, 0.0], align_col='Pretone_end_dt',
-        #                                  event='ToneTime', xlabel='Time since pattern onset', pdr=False,)
-        # run.normdev_13_stage4[0].canvas.manager.set_window_title('Stage5normal_deviant_Viol')
-        #
-        # run.normdev_13 = run.get_aligned([['e!0','s3','d0','tones4'],['e!0','s3','d4','tones4']],
-        #                                  event_shift=[0.5, 0.5],
-        #                                  event='Violation', xlabel='Time since pattern onset', pdr=False,
-        #                                  plotlabels=['normal','deviant'], plotsess=False,
-        #                                  use4pupil=True, pmetric=pmetric2use)
-        #
-        # run.normdev2 = run.get_aligned([['e!0','s3','d0','tones4','stage5','a1'],['e!0','s3','d2','tones4','stage5','a1']],
-        #                                event_shift=[0.0, 0.0], align_col='Pretone_end_dt',
-        #                                event='ToneTime', xlabel='Time since pattern onset', pdr=False,
-        #                                plotlabels=['normal','deviant'], plotsess=False,
-        #                                use4pupil=True, pmetric=pmetric2use)
-        #
-        # run.newnorms = run.get_aligned([['e!0','s3','d0','tones4','stage5'],['e!0','s3','d-1','tones4','stage5']],
-        #                                event_shift=[0.0, 0.0],
-        #                                event='ToneTime', xlabel='Time since pattern onset', pdr=False,
-        #                                plotlabels=['normal','new normals'], plotsess=False,
-        #                                use4pupil=True, pmetric=pmetric2use)
-        # run.abcd_control = run.get_aligned([['e!0','s3','d0','tones4','stage5'],['e=0','s3','stage5']],  # line629 in utils
-        #                                       event_shift=[0.0, 0.0],
-        #                                       event='ToneTime', xlabel='Time since pattern onset', pdr=False,
-        #                                       plotlabels=['normal','deviant'], plotsess=False,
-        #                                       use4pupil=True, pmetric='dlc_radii_a_zscored')
-        #
-        # run.normdev_delta = run.get_pupil_delta(run.normdev_13[2],['DO45','DO46','DO47','DO48'],['normal','deviant'])
+        # with multiprocessing.Pool() as pool:
 
-    if 'altvsrand' in paradigm:
-        run.altvsrand = run.get_aligned([['e!0','s0','tones4'], ['e!0','s1','tones4']], pdr=False,
-                                        event_shift=[0.0, 0.0],
-                                        xlabel='Time since pattern offset', plotsess=False,
-                                        plotlabels=['random','alternating'],
-                                        use4pupil=True, pmetric=pmetric2use,)
-
-    if '0.5_fam' in paradigm:
-        run.add_stage3_05_order()
-        run.fam_05 = {}
-
-        column = 'ToneTime_dt'
-        shifts = [[0.0, 'ToneTime']]
-
-        stages = [3]
-        events = ['0.5_0', '0.5_1','0.5_2', 'none']
-        pattern_types = []
-        labels = ['0.5 Block (0.0)', '0.5 Block 1 (0.1)','0.5 Block 2 (0.9)', 'Control']
-        rate_filter = ['p0.5','p0.5','p0.5',]
-        for s in stages:
-            for shift in shifts:
-                cond_name = f'stage{s}_{events}_{column}_{shift[0]}'
-                event_filters = []
-                for ei,e in enumerate(events):
-                    if e != 'none':
-                        event_filters.append(['e!0', 's0', e, rate_filter[ei], 'tones4', f'stage{s}','a1'])
-                    else:
-                        event_filters.append(['e=0', 's0', f'stage{s}','a1','p0.5'])
-
-                run.fam_05[cond_name] = run.get_aligned(event_filters,
-                                                         event_shift=[shift[0]]*len(event_filters), align_col=column,
-                                                         event=shift[1], xlabel=f'Time since {shift[1]}', pdr=False,
-                                                         plotlabels=labels[:len(event_filters)])
-                run.fam_05[cond_name][0].canvas.manager.set_window_title(cond_name)
-                fig_savename = f'{cond_name}_a.svg'
-                fig_path = os.path.join(run.figdir,fig_savename)
-                while os.path.exists(fig_path):
-                    file_suffix = os.path.splitext(fig_path)[0][-1]
-                    fig_path = f'{os.path.splitext(fig_path)[0][:-1]}' \
-                               f'{chr(ord(file_suffix)+1)}{os.path.splitext(fig_path)[1]}'
-                if not os.path.exists(fig_path):
-                    run.fam_05[cond_name][0].savefig(fig_path)
-                else:
-                    print('path exists, not overwriting')
-
+        for cond_key in tqdm(condition_keys,desc=f'processing condition key',total=len(condition_keys)):
+            cond_filts = self.all_filts.get(cond_key,None)
+            if cond_filts == None:
+                print(f'{cond_key} not in {self.all_filts.keys()}. Skipping')
+                continue
+            if f'{cond_key}{key_suffix}' in dataclass.aligned.keys():
+                print(f'{cond_key}{key_suffix} exists. Skipping')
+                continue
+            if len(cond_filts) == 3:
+                cond_align_point = cond_filts[2]
+            elif '2X' in cond_key:
+                cond_align_point = align_pnts[2]
+            else:
+                cond_align_point = align_pnts[0]
+            batch_analysis(dataclass, dataclass.aligned, stages, f'{cond_align_point}_dt', [[0, f'{cond_align_point}'], ],
+                           cond_filts[0], cond_filts[1], pmetric=pmetric2use,
+                           filter_df=True, plot=False, sep_cond_cntrl_flag=False, cond_name=f'{cond_key}{key_suffix}',
+                           use4pupil=True, baseline=do_baseline, pdr=False, extra_filts=extra_filts)
+        # get_mean_subtracted_traces(dataclass,suffix=key_suffix)

@@ -2,7 +2,11 @@ import matplotlib.colors
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
 import sklearn
-from pupil_analysis_func import Main, get_fig_mosaic
+
+import align_functions
+from align_functions import get_aligned_events
+from pupil_analysis_func import Main
+from plotting_functions import get_fig_mosaic
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import numpy as np
@@ -232,7 +236,7 @@ if __name__ == "__main__":
         for col in run.trialData.columns:
             if 'Time' in col:
                 utils.add_datetimecol(run.trialData,col)
-        run.get_aligned_events = TDAnalysis.get_aligned_events
+        run.get_aligned_events = get_aligned_events
         # run.index = pd.concat({run.trialData['Trial_Start_Time_dt'].to_numpy():run.trialData},names=['time']).index
         run.trialData.set_index('Trial_Start_Time_dt',append=True,inplace=True,drop=False)
 
@@ -241,7 +245,7 @@ if __name__ == "__main__":
             with open(harpmatrices_pkl, 'rb') as pklfile:
                 run.harpmatrices = pickle.load(pklfile)
         else:
-            run.harpmatrices = utils.get_event_matrix(run,run.data,r'W:\mouse_pupillometry\mouseprobreward_hf\harpbins',)
+            run.harpmatrices = align_functions.get_event_matrix(run, run.data, r'W:\mouse_pupillometry\mouseprobreward_hf\harpbins', )
             with open(harpmatrices_pkl, 'wb') as pklfile:
                 pickle.dump(run.harpmatrices,pklfile)
         run.lickrasters_firstlick = {}

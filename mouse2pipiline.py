@@ -1,3 +1,4 @@
+import align_functions
 from psychophysicsUtils import *
 import analysis_utils as utils
 from datetime import datetime, time, timedelta
@@ -13,7 +14,7 @@ def align2eventScalar(df,pupilsize,pupiltimes, pupiloutliers,beh, dur, rate, fil
 
     pupiltrace = pd.Series(pupilsize,index=pupiltimes)
     outlierstrace = pd.Series(pupiloutliers,index=pupiltimes)
-    filtered_df = utils.filter_df(df,filters)
+    filtered_df = align_functions.filter_df(df, filters)
     t_len = int((abs(dur[0]) + abs(dur[1])) / rate)+1
     dur = np.array(dur)
     # print(t_len)

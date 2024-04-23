@@ -26,10 +26,10 @@ def merge_sessions(datadir,animal_list,filestr_cond, datestr_format='%y%m%d'):
                     animal_name = filename_parts[0]
                     session_date = filename_parts[2]
                     loaded_file = pd.read_csv(os.path.join(root,file), delimiter=',')
-                    if loaded_file['Name'][0] in animal_list \
+                    if loaded_file['name'][0] in animal_list \
                             and datetime.strptime(date_range[0], '%d/%m/%Y') <= datetime.strptime(session_date,datestr_format)\
                             <= datetime.strptime(date_range[1], '%d/%m/%Y'):
-                        loaded_file.set_index(['Name','Date']).sort_index()
+                        loaded_file.set_index(['name','Date']).sort_index()
                         file_df.append(copy(loaded_file))
 
         elif filestr_cond == 'TrialData':
@@ -46,9 +46,9 @@ def merge_sessions(datadir,animal_list,filestr_cond, datestr_format='%y%m%d'):
                             if len(loaded_file) >0:
                                 name_series = [animal_name] * loaded_file.shape[0]
                                 date_series = [session_date] * loaded_file.shape[0]
-                                loaded_file['Name'] = name_series
-                                loaded_file['Date'] = date_series
-                                loaded_file = loaded_file.set_index(['Name','Date']).sort_index()
+                                loaded_file['name'] = name_series
+                                loaded_file['date'] = date_series
+                                loaded_file = loaded_file.set_index(['name','date']).sort_index()
                                 file_df.append(loaded_file)
                         except pd.errors.EmptyDataError:
                             print('Empty data frame')

@@ -6,6 +6,8 @@ import time
 from datetime import datetime, timedelta
 from collections import OrderedDict
 from matplotlib import pyplot as plt
+
+import align_functions
 import analysis_utils as utils
 import pylab
 from sklearn.linear_model import LinearRegression
@@ -50,15 +52,15 @@ class TDAnalysis:
             stats_dict[animal] = dict()  # dictionary to hold daily stats
             for date in self.dates():
                 statnames = ['Trials Done', 'NonViol Trials', 'Early Rate', 'Error Rate']
-                data_day = utils.filter_df(self.trial_data.loc[animal, date], filters)
+                data_day = align_functions.filter_df(self.trial_data.loc[animal, date], filters)
                 trials_done_day = data_day.shape[0]
-                correct_trials = utils.filter_df(data_day, ['a3']).shape[0]
+                correct_trials = align_functions.filter_df(data_day, ['a3']).shape[0]
                 try:
-                    early_rate = utils.filter_df(data_day, ['a2']).shape[0] / trials_done_day
+                    early_rate = align_functions.filter_df(data_day, ['a2']).shape[0] / trials_done_day
                 except ZeroDivisionError:
                     early_rate = 1
                 try:
-                    error_rate = utils.filter_df(data_day, ['a0']).shape[0] / utils.filter_df(data_day, ['a3']).shape[0]
+                    error_rate = align_functions.filter_df(data_day, ['a0']).shape[0] / align_functions.filter_df(data_day, ['a3']).shape[0]
                 except ZeroDivisionError:
                     error_rate = 1
                 stats_day = pd.DataFrame([[trials_done_day, correct_trials, early_rate, error_rate]], columns=statnames)
@@ -97,15 +99,15 @@ for animal in animals:
     stats_dict[animal] = dict()
     for date in trial_data.loc[animal].index.unique():
         cols = ['Trials Done', 'NonViol Trials','Early Rate', 'Error Rate']
-        data_day = utils.filter_df(trial_data.loc[animal,date],['b1'])
+        data_day = align_functions.filter_df(trial_data.loc[animal,date], ['b1'])
         trials_done_day = data_day.shape[0]
-        correct_trials  = utils.filter_df(data_day,['a3']).shape[0]
+        correct_trials  = align_functions.filter_df(data_day, ['a3']).shape[0]
         try:
-            early_rate = utils.filter_df(data_day,['a2']).shape[0]/trials_done_day
+            early_rate = align_functions.filter_df(data_day, ['a2']).shape[0] / trials_done_day
         except ZeroDivisionError:
             early_rate = 1
         try:
-            error_rate = utils.filter_df(data_day, ['a0']).shape[0] / utils.filter_df(data_day, ['a3']).shape[0]
+            error_rate = align_functions.filter_df(data_day, ['a0']).shape[0] / align_functions.filter_df(data_day, ['a3']).shape[0]
         except ZeroDivisionError:
             error_rate = 1
         stats_day = pd.DataFrame([[trials_done_day,correct_trials,early_rate,error_rate]],columns=cols)
@@ -148,7 +150,7 @@ plot_error[1].set_title('Miss rate all trials')
 #                                          legend_labels = anon_animals,plottype='scatter')
 
 # early_df = utils.filter_df(trial_data,['b1','a2'])
-early_df = utils.filter_df(trial_data,['b1'])
+early_df = align_functions.filter_df(trial_data, ['b1'])
 
 early_df['Trial_End_datetime'] = np.array([datetime.strptime(trial_end[:-1], '%H:%M:%S.%f')
                                            for trial_end in early_df['Trial_End']])
@@ -205,10 +207,12 @@ correcttrialnum_fig,correcttrialnum_ax,correcttrialnum_xy = utils.plot_metricrat
 #             # plt.plot(data['frameNum'],data['rel_time'])
 #             plt.hist(data['rel_time'], bins=data['rel_time'].max(),alpha=0.1,density=True)
 hist_posttone_fig,hist_posttone_ax = plt.subplots(2,sharex=True)
-weights = np.ones_like(utils.filter_df(trial_data,['d0','b1'])['PostTone_Duration']) / len(utils.filter_df(trial_data,['d0','b1'])['PostTone_Duration'])
-hist_posttone_ax[0].hist(utils.filter_df(trial_data,['d0','b1'])['PostTone_Duration'],histtype='step',weights=weights)
-weights = np.ones_like(utils.filter_df(trial_data,['d!0','b1'])['PostTone_Duration']) / len(utils.filter_df(trial_data,['d!0','b1'])['PostTone_Duration'])
-hist_posttone_ax[1].hist(utils.filter_df(trial_data,['d!0','b1'])['PostTone_Duration'],histtype='step',weights=weights)
+weights = np.ones_like(align_functions.filter_df(trial_data, ['d0', 'b1'])['PostTone_Duration']) / len(
+    align_functions.filter_df(trial_data, ['d0', 'b1'])['PostTone_Duration'])
+hist_posttone_ax[0].hist(align_functions.filter_df(trial_data, ['d0', 'b1'])['PostTone_Duration'], histtype='step', weights=weights)
+weights = np.ones_like(align_functions.filter_df(trial_data, ['d!0', 'b1'])['PostTone_Duration']) / len(
+    align_functions.filter_df(trial_data, ['d!0', 'b1'])['PostTone_Duration'])
+hist_posttone_ax[1].hist(align_functions.filter_df(trial_data, ['d!0', 'b1'])['PostTone_Duration'], histtype='step', weights=weights)
 
 for col in trial_data.keys():
     if col.find('Time') != -1 or col.find('Start') != -1 or col.find('End') != -1:
@@ -216,7 +220,7 @@ for col in trial_data.keys():
             utils.add_datetimecol(trial_data,col)
 
 # plot viol time relative to tone time
-viol_t_tone_df = utils.filter_df(trial_data,['b1','a2','e!0'])
+viol_t_tone_df = align_functions.filter_df(trial_data, ['b1', 'a2', 'e!0'])
 viol_t_violtime = viol_t_tone_df['Trial_End_dt']
 viol_firsttone = viol_t_tone_df['ToneTime_dt']
 viol_vs_tone = [t.total_seconds() for t in viol_t_violtime - viol_firsttone]
@@ -246,8 +250,8 @@ hist_viol_tones_ax.set_title('Distribution of early withdrawals aligned to Patte
 allviols_fig, allviols_ax = plt.subplots()
 embed_t_violcount = []
 time_violcount = []
-non_warmps_df = utils.filter_df(trial_data,['b1'])
-embed_t_viol_df = utils.filter_df(trial_data,['b1','e!0'])
+non_warmps_df = align_functions.filter_df(trial_data, ['b1'])
+embed_t_viol_df = align_functions.filter_df(trial_data, ['b1', 'e!0'])
 for embed_t in sorted(embed_t_viol_df['PreTone_Duration'].unique()):
     viols_df = copy(embed_t_viol_df[embed_t_viol_df['PreTone_Duration'] == embed_t])
     embed_t_violcount.append((viols_df['Trial_Outcome']==-1).sum()/(viols_df['Trial_Outcome']!=-1).sum())
