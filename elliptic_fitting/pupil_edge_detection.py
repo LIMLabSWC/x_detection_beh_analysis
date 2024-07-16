@@ -43,7 +43,7 @@ def sobel_filter(image):
 
 
 def get_canny_edges(frame, bbox,mask_thresh,sigma=1.5,):
-
+    assert bbox
     if not bbox:  # getting smaller bbox on every frame
         frames4bbox = np.full_like(frame, 255)
         frames4bbox[ 40:-40, 40:-40] = frame[40:-40,40:-40]  # setting boundary  pixels to white for bbox

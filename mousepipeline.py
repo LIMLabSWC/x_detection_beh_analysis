@@ -1,5 +1,7 @@
 import os
 
+import pandas as pd
+
 from psychophysicsUtils import *
 import analysis_utils as utils
 from datetime import datetime, time, timedelta
@@ -10,13 +12,33 @@ from scipy.stats import zscore
 import scipy.signal
 import time
 from PupilProcessing.pupilpipeline import Main as Main
-from pathlib import Path
+from pathlib import Path, PureWindowsPath, PurePosixPath
 import yaml
 from loguru import logger
 from rich.logging import RichHandler
 from pyinspect import install_traceback
 import argparse
 import platform
+
+
+def posix_from_win(path: str, ceph_linux_dir='/ceph/akrami') -> Path:
+    """
+    Convert a Windows path to a Posix path.
+
+    Args:
+        path (str): The input Windows path.
+        :param ceph_linux_dir:
+
+    Returns:
+        Path: The converted Posix path.
+    """
+    if ':\\' in path:
+        path_bits = PureWindowsPath(path).parts
+        path_bits = [bit for bit in path_bits if '\\' not in bit]
+        return Path(PurePosixPath(*path_bits))
+    else:
+        assert ceph_linux_dir
+        return Path(path).relative_to(ceph_linux_dir)
 
 
 if __name__ == "__main__":
@@ -82,7 +104,6 @@ if __name__ == "__main__":
     # splitdir = np.vstack([[np.array(path.parts) for path in list_aligned]])
     dir_animals, dir_animaldates = splitdir[:, 0], splitdir[:, 1]
 
-
     if args.date:
         dates2process=[args.date]
     else:
@@ -102,8 +123,23 @@ if __name__ == "__main__":
             if spec_dates:
                 if d in dates2process:
                     animals2process.append(e)
-    spec_animal_dates = []
 
+    # get animals and dates from session topology
+    ceph_dir = Path(config[f'ceph_dir_{os}'])
+    if config.get('session_topology_path'):
+        use_session_topology = True
+    else:
+        use_session_topology = False
+    
+    if use_session_topology:
+        sess_top_path = ceph_dir/posix_from_win(config['session_topology_path'])
+        session_topology = pd.read_csv(sess_top_path)
+        animals2process = session_topology['name'].unique().tolist()
+        dates2process = session_topology['date'].unique().astype(str).tolist()
+    else:
+        session_topology = None
+    # animals2process=['DO80']
+    # dates2process = ['240419']
     do_zscore = config['do_zscore']
     bandpass_met = config['bandpass_met']
     han_size = config['han_size']
@@ -118,13 +154,21 @@ if __name__ == "__main__":
     pklname = f'{pkl_prefix}_{config["pklname_suffix"]}_{config["protocol"]}_{pdata_topic.split("_")[1]}_{int(fs)}Hz_hpass{str(bandpass_met[0]).replace(".", "")}_lpass{str(bandpass_met[1]).replace(".", "")}' \
               f'{han_size_str}_TOM{"_rawsize" * (not do_zscore)}.pkl'
     # pklname = r'mouse_fm_fam_2d_90Hz_hpass00_hanning025_detrend.pkl'
-    # preprocess_pkl =f'{pkl_prefix}_fam_w_LR_noTTL.pkl'
+    preprocess_pkl =f'{pkl_prefix}_{config["pklname_suffix"]}_{config["protocol"]}_w_LR_noTTL.pkl'
+    to_redo = config.get('sess_to_redo',[])
+    session_topology['date_str'] = session_topology['date'].astype(str)
+    if to_redo:
+        _to_redo = [[e] if len(e.split('_')) == 2  else
+                    [f'{ee}_{e}' for ee in session_topology.query(f'date=="{e}"')['name']] if e.isnumeric() else
+                    [f'{e}_{ee}' for ee in session_topology.query(f'name=="{e}"')['date']] for e in to_redo]
+        to_redo = sum(_to_redo, [])
+        # [e if len(e.split('_')==2) e if e.isnumeric() else [f'{e}_{ee}' for ee in dates2process] for e in to_redo]
 
     run = Main(animals2process, dates2process,(Path(config[f'pkl_dir_{os}'])/ pklname), tdatadir,
                pdatadir, pdata_topic, fs, han_size=han_size, passband=bandpass_met, aligneddir=aligneddir,
-               subjecttype='mouse', dlc_snapshot=[2450000, 1300000], overwrite= True, do_zscore=do_zscore,
-               lowtype=lowtype, dirstyle=dirstyle, dlc_filtflag=True, redo=config['sess_to_redo'],
-               preprocess_pklname=Path(config[f'pkl_dir_{os}'], config[f'preprocess_pkl']),use_ttl=config['use_TTL'],
-               protocol=config['protocol'],use_canny_ell=config['use_canny_ell'])
+               subjecttype='mouse', dlc_snapshot=[2450000, 1300000], overwrite= config.get('ow_flag',False), do_zscore=do_zscore,
+               lowtype=lowtype, dirstyle=dirstyle, dlc_filtflag=True, redo=to_redo,
+               preprocess_pklname=Path(config[f'pkl_dir_{os}'])/preprocess_pkl,use_ttl=config['use_TTL'],
+               protocol=config['protocol'],use_canny_ell=config['use_canny_ell'], session_topology=session_topology)
     logger.info('Main class initialised')
     run.load_pdata()

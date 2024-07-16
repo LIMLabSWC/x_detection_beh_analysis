@@ -34,6 +34,7 @@ def merge_sessions(datadir,animal_list,filestr_cond, date_range, datestr_format=
     """
 
     file_df = []
+    date_range = [str(e) for e in date_range]
     if date_range[1] == 'now':
         date_range[1] = datetime.strftime(datetime.now(),datestr_format)
     if date_range[0].find('/') == -1:
