@@ -109,7 +109,7 @@ class VideoFrameExtractor:
         if 0 <= self.current_frame_index < len(self.frames):
             frame = self.frames[self.current_frame_index]
             frame_image = Image.fromarray(frame)
-            frame_image = frame_image.resize((800, 600), Image.ANTIALIAS)
+            # frame_image = frame_image.resize((800, 600), Image.ANTIALIAS)
             self.photo = ImageTk.PhotoImage(frame_image)
             self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)
 
