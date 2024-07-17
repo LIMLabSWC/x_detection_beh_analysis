@@ -5,10 +5,7 @@ from tkinter import filedialog, messagebox
 import skvideo.io
 import numpy as np
 from PIL import Image, ImageTk
-import random
 import csv
-import os
-
 import pandas as pd
 from pathlib import Path
 import yaml
@@ -196,8 +193,10 @@ if __name__ == "__main__":
     else:
         session_topology = None
     start_date = 240626
-    vids2process = (session_topology.query('date >= @start_date').sort_values('date')['videos_dir'].tolist())
-    vids2process = [ceph_dir/posix_from_win(vid) for vid in vids2process]
+    vids2process = (session_topology.query('date >= @start_date').sort_values(['date','name'])['videos_dir'].tolist())
+    vids2process = [ceph_dir/posix_from_win(vid) for vid in vids2process if
+                    all(['pupil_bbox.csv' not in e.name for e in  list((ceph_dir/posix_from_win(vid)).iterdir())])]
+    print(f'first video: {vids2process[0]}')
 
     root = tk.Tk()
     app = VideoFrameExtractor(root, vids=vids2process)
