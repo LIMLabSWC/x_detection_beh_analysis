@@ -97,7 +97,7 @@ class VideoFrameExtractor:
         self.load_video()
 
     def extract_frames(self):
-        video_reader = skvideo.io.vreader(self.video_path, num_frames=10000)
+        video_reader = skvideo.io.vreader(self.video_path, num_frames=50000)
         all_frames = np.array([frame for frame in video_reader])
         total_frames = len(all_frames)
         frame_indices = [int(total_frames*n)-1 for n in [0.9,0.95,0.98]]
@@ -173,6 +173,7 @@ class VideoFrameExtractor:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--config_file', default=Path('config', 'mouse_fam_old_conf_unix.yaml'))
+
     args = parser.parse_args()
     sys_os = platform.system().lower()
 
