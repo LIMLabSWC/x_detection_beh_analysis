@@ -193,7 +193,7 @@ if __name__ == "__main__":
         dates2process = session_topology['date'].unique().astype(str).tolist()
     else:
         session_topology = None
-    # start_date = 240626
+    start_date = 0
     vids2process = (session_topology.query('date >= @start_date').sort_values(['date','name'])['videos_dir'].tolist())
     vids2process = [ceph_dir/posix_from_win(vid) for vid in vids2process if
                     all(['pupil_bbox.csv' not in e.name for e in  list((ceph_dir/posix_from_win(vid)).iterdir())])]
