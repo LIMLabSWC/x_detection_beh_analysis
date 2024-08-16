@@ -83,9 +83,9 @@ if __name__ == "__main__":
 
         keys = []
 
-        # condition_keys = ['p_rate', 'p_onset', 'alt_rand',  'pat_nonpatt_2X',
-        #                   'p_rate_local']
-        condition_keys = ['p_rate','p_rate_local']
+        condition_keys = ['p_rate', 'p_onset', 'alt_rand',  'pat_nonpatt_2X',
+                          'p_rate_local']
+        # condition_keys = ['p_rate','p_rate_local']
         condition_keys_canny = [f'{e}_canny' for e in condition_keys]
 
         # aligned_pklfile = r'pickles\fm_fam_aligned_nohpass.pkl'
@@ -113,8 +113,8 @@ if __name__ == "__main__":
         # with open(aligned_pklfile, 'wb') as pklfile:
         #     pickle.dump(run.aligned,pklfile)
 
-        run.aligned['alt_rand_nocontrol'] = copy(run.aligned['alt_rand'])
-        run.aligned['alt_rand_nocontrol'][2].pop(2)
+        # run.aligned['alt_rand_nocontrol'] = copy(run.aligned['alt_rand'])
+        # run.aligned['alt_rand_nocontrol'][2].pop(2)
 
         plot = False
         fig_form, chunked_fig_form, n_cols,plt_is = get_fig_mosaic(dates2plot)
@@ -347,12 +347,6 @@ if __name__ == "__main__":
         musc_nonmusc_2x_tsplot[0].set_size_inches(9,7)
         musc_nonmusc_2x_tsplot[0].set_constrained_layout('constrained')
         musc_nonmusc_2x_tsplot[0].show()
-
-
-
-
-
-
         # bootstrap for n days:
         n_bootstrap_repeats = 10
         rand_subset_dates = [np.random.choice(prate_control_dates,len(prate_muscimol_dates), replace=True)
@@ -387,20 +381,20 @@ if __name__ == "__main__":
         prate_musc_tsplots[1][0, 2].set_xlabel('Time since pattern onset (s)')
         utils.unique_legend((prate_musc_tsplots[0],prate_musc_tsplots[1][0, 2]))
 
-        prate_rand_subset_tsplots[0].show()
-        prate_musc_tsplots[0].set_constrained_layout('constrained')
-        prate_musc_tsplots[0].show()
-        conditions_class.get_condition_dict(run_oldmice, ['p_rate'], stages, extra_filts=['a1'])
-        old_vs_new_tsplot = plt.subplots(ncols=2,sharey='all')
-        prate_aligned_old = get_subset(run_oldmice, run_oldmice.aligned, 'p_rate',{'date':['230214', '230216', '230221', '230222', '230113', ]},
-                                       events=list_cond_filts['p_rate'][1],
-                                       beh=f'{align_pnts[0]} onset',
-                                       plttitle=f'Response to pattern onset', plttype='ts',
-                                       ylabel='zscored pupil size', xlabel=f'Time since pattern onset (s)',
-                                       pltaxis=(old_vs_new_tsplot[0],
-                                                old_vs_new_tsplot[1][0]),
-                                       )
-        old_vs_new_tsplot[0].show()
+        # prate_rand_subset_tsplots[0].show()
+        # prate_musc_tsplots[0].set_constrained_layout('constrained')
+        # prate_musc_tsplots[0].show()
+        # conditions_class.get_condition_dict(run_oldmice, ['p_rate'], stages, extra_filts=['a1'])
+        # old_vs_new_tsplot = plt.subplots(ncols=2,sharey='all')
+        # prate_aligned_old = get_subset(run_oldmice, run_oldmice.aligned, 'p_rate',{'date':['230214', '230216', '230221', '230222', '230113', ]},
+        #                                events=list_cond_filts['p_rate'][1],
+        #                                beh=f'{align_pnts[0]} onset',
+        #                                plttitle=f'Response to pattern onset', plttype='ts',
+        #                                ylabel='zscored pupil size', xlabel=f'Time since pattern onset (s)',
+        #                                pltaxis=(old_vs_new_tsplot[0],
+        #                                         old_vs_new_tsplot[1][0]),
+        #                                )
+        # old_vs_new_tsplot[0].show()
 
         print('break now if wanted')
         time.sleep(30)

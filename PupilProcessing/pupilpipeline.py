@@ -388,6 +388,7 @@ class Main:
                 if isinstance(sess_recdir,(list,tuple,np.ndarray)):
                     # check files
                     if not Path(sess_recdir[0],f'{name}_eye0_timestamps.csv').is_file():
+                        logger.error(f'no file for {name} in {sess_recdir[0]}')
                         return None,None
                     try:
                         recs_list = [pd.read_csv(Path(rec,f'{name}_eye0_timestamps.csv'))
@@ -413,7 +414,7 @@ class Main:
 
                 for ri,rec in enumerate(recs):
                     if rec.empty:
-                        logger.warning(f'Recording for {name} empty')
+                        logger.error(f'Recording for {name} empty')
                         continue
                     animal_pupil = pd.DataFrame()  # init df
                     rec.rename(index=str,columns={'timestamp': 'Timestamp'},inplace=True)
@@ -452,7 +453,11 @@ class Main:
                                                                                 session_TD['Bonsai_time_dt'].iloc[0]
                                                                                 +timedelta(seconds=float(e)/1e9+harp_sync_ttl_offest_secs))
                                 animal_pupil['frametime'] = new_times
-                                animal_pupil['timestamp'] = matched_ttls_times.values
+                                try:
+                                    animal_pupil['timestamp'] = matched_ttls_times.values[:len(animal_pupil)]
+                                except ValueError:
+                                    logger.error(f'ERROR line {sys.exc_info()[2].tb_lineno}: ttl mismatch for {name} {ri}')
+                                    continue
 
                             else:
                                 cam_ttls_dt = np.full_like(cam_ttls, np.nan, dtype=object)
@@ -617,7 +622,10 @@ class Main:
             # animal_pupil_subset = animal_pupil_subset.dropna()
             pupilclass = pupilDataClass(f'{name}')
             # pupilclass.rawTimes = np.array([e.timestamp() for e in animal_pupil_subset.index])
-            pupilclass.rawTimes = animal_pupil_subset['timestamp'].values
+            try:pupilclass.rawTimes = animal_pupil_subset['timestamp'].values
+            except KeyError:
+                logger.error(f'no timestamps for {name}. not processing')
+                continue
             with HiddenPrints():
                 unitimes = uniformSample(pupilclass.rawTimes,pupilclass.rawTimes,new_dt=self.samplerate)[1]
                 # uni_timestamps = uniformSample(animal_pupil_subset['timestamp'].values,

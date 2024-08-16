@@ -134,8 +134,10 @@ if __name__ == "__main__":
     if use_session_topology:
         sess_top_path = ceph_dir/posix_from_win(config['session_topology_path'])
         session_topology = pd.read_csv(sess_top_path)
+        session_topology['videos_dir'] = session_topology['videos_dir'].apply(lambda x: ceph_dir/posix_from_win(x))
         animals2process = session_topology['name'].unique().tolist()
         dates2process = session_topology['date'].unique().astype(str).tolist()
+
     else:
         session_topology = None
     # animals2process=['DO80']
@@ -169,6 +171,7 @@ if __name__ == "__main__":
                subjecttype='mouse', dlc_snapshot=[2450000, 1300000], overwrite= config.get('ow_flag',False), do_zscore=do_zscore,
                lowtype=lowtype, dirstyle=dirstyle, dlc_filtflag=True, redo=to_redo,
                preprocess_pklname=Path(config[f'pkl_dir_{os}'])/preprocess_pkl,use_ttl=config['use_TTL'],
-               protocol=config['protocol'],use_canny_ell=config['use_canny_ell'], session_topology=session_topology)
+               protocol=config['protocol'],use_canny_ell=config['use_canny_ell'],
+               session_topology=session_topology)
     logger.info('Main class initialised')
     run.load_pdata()

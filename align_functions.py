@@ -58,7 +58,11 @@ def align2events(df, timeseries_data, pupiltimes, pupiloutliers, beh, t_window, 
 
     filtered_df = filter_df(df,filters)
     t_window = np.array(t_window)
-    dt = pupiltimes.diff().abs().min().total_seconds()
+    # dt = np.round(pupiltimes.diff().abs().min().total_seconds(),2)
+    # dt = np.round(pupiltimes.diff().median().total_seconds(),2)
+    dt = np.round(1/90,2)
+    print(f'dt = {dt}')
+    # dt = np.round(np.nanmedian(np.diff(pupiltimes.index)), 2)
 
     # dataseries.index = pd.to_datetime(dataseries.index.to_series()).dt.floor('0.01S')
     # eventtimes = pd.to_datetime(filtered_df[beh]).dt.floor('0.01S')

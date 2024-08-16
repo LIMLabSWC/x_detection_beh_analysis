@@ -402,7 +402,7 @@ def glm_from_baseline(traces: pd.DataFrame,dur,bseln_dur,ax):
 
 class Main:
 
-    def __init__(self,pklfilename, duration_window=(-1,2),extra_steps=True,figdir=None,fig_ow=False):
+    def __init__(self,pklfilename, duration_window=(-1,3),extra_steps=True,figdir=None,fig_ow=False):
             self.subsets = {}
             plt.style.use("seaborn-white")
             with open(pklfilename,'rb') as pklfile:
