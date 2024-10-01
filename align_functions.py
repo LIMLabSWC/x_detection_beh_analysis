@@ -438,13 +438,13 @@ def filter_df(data_df, filters) -> pd.DataFrame:
         'd_C2B': ['C_tone_diff', -2],
         'd_C2A': ['C_tone_diff', -4],
         'd_C2D': ['C_tone_diff', 1],
-        'local_rate_1.0': ['Tone_Position_roll', [0.0, 0.1]],
-        # 'local_rate_1.0': ['Tone_Position_roll', [0.0, 0.3]],
+        # 'local_rate_1.0': ['Tone_Position_roll', [0.0, 0.1]],
+        'local_rate_1.0': ['Tone_Position_roll', [0.0, 0.3]],
         'local_rate_0.8': ['Tone_Position_roll', [0.2, 0.3]],
         'local_rate_0.6': ['Tone_Position_roll', [0.4, 0.5]],
         'local_rate_0.4': ['Tone_Position_roll', [0.6, 0.7]],
-        'local_rate_0.2': ['Tone_Position_roll', [0.8, 0.9]],
-        # 'local_rate_0.2': ['Tone_Position_roll', [0.6, 0.9]],
+        # 'local_rate_0.2': ['Tone_Position_roll', [0.8, 0.9]],
+        'local_rate_0.2': ['Tone_Position_roll', [0.6, 0.9]],
 
     }
     for e in np.linspace(0,1,11):

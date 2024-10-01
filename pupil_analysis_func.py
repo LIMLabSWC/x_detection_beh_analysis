@@ -446,7 +446,10 @@ class Main:
                     self.figdir = figdir
                     os.mkdir(self.figdir)
             # self.figdir = f''
-            self.samplerate = self.data[self.sessions[0]].pupildf.index.to_series().diff().median().total_seconds()
+            try:
+                self.samplerate = self.data[self.sessions[0]].pupildf.index.to_series().diff().median().total_seconds()
+            except AttributeError:
+                self.samplerate = 1/90
 
     def add_date_pupildf(self):
         for sess in self.data:
@@ -928,5 +931,5 @@ class PupilEventConditions:
             batch_analysis(dataclass, dataclass.aligned, stages, f'{cond_align_point}_dt', [[0, f'{cond_align_point}'], ],
                            cond_filts[0], cond_filts[1], pmetric=pmetric2use,
                            filter_df=True, plot=False, sep_cond_cntrl_flag=False, cond_name=f'{cond_key}{key_suffix}',
-                           use4pupil=True, baseline=do_baseline, pdr=False, extra_filts=extra_filts)
+                           use4pupil=False, baseline=do_baseline, pdr=False, extra_filts=extra_filts)
         # get_mean_subtracted_traces(dataclass,suffix=key_suffix)

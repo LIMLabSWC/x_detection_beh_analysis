@@ -61,6 +61,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--config_file', default=Path('config','mouse_fam_old_conf_unix.yaml'))
     parser.add_argument('-date', default=None)
+    parser.add_argument('--sess_top_query', default=None)
     args = parser.parse_args()
     os = platform.system().lower()
 
@@ -165,6 +166,11 @@ if __name__ == "__main__":
                     [f'{e}_{ee}' for ee in session_topology.query(f'name=="{e}"')['date']] for e in to_redo]
         to_redo = sum(_to_redo, [])
         # [e if len(e.split('_')==2) e if e.isnumeric() else [f'{e}_{ee}' for ee in dates2process] for e in to_redo]
+
+    if args.sess_top_query:
+        session_topology = session_topology.query(args.sess_top_query)
+        animals2process = session_topology['name'].unique().tolist()
+        dates2process = session_topology['date'].unique().astype(str).tolist()
 
     run = Main(animals2process, dates2process,(Path(config[f'pkl_dir_{os}'])/ pklname), tdatadir,
                pdatadir, pdata_topic, fs, han_size=han_size, passband=bandpass_met, aligneddir=aligneddir,

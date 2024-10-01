@@ -346,13 +346,15 @@ def removeOutliers(dataArray,timeArray,n_speed=2.5,n_size=2.5, plotHist=False): 
 	# data = data * (absSpeed<threshold_speed_high) * (absSpeed>threshold_speed_low)
 	# print(" (%.2f%%) " %(100*(1-np.sum((absSpeed<threshold_speed_high) * (absSpeed>threshold_speed_low))/len(data))),end="")
 
-	data[data<threshold_size_low] = 0.0
-	data[data>threshold_size_high] = 0.0
+	low_outliers = data<threshold_size_low
+	high_outliers = data>threshold_size_high
+	na_outliers = np.isnan(data)
+	isOutlier = np.any([low_outliers,high_outliers,na_outliers],axis=0)
+	data[isOutlier] = 0.0
 	print(f'High thresh:{threshold_size_high}, Low thresh: {threshold_size_low} \n Size out = {(data==0).mean()*100}%')
 	# data[absSpeed>threshold_speed_high] = 0.0 #only take away low sizes and zero values
 	# print(f'Speed thresh:{threshold_size_high} \n Speed out ={(absSpeed>threshold_speed_high).mean()*100}% ')
 
-	isOutlier = data == 0.0
 	if isOutlier.mean() > 0.9:
 		print('baddd')
 	print(f'Percent outlier = {isOutlier.mean()*100}%')

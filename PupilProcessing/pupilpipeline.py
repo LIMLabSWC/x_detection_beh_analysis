@@ -87,6 +87,17 @@ def get_dlc_est_path(recdir, filt_flag, non_plabs_str,name):
         return dlc_pathfile,dlc_snapshot
 
 
+def get_dlc_est_files(name,dlc_filtflag,non_plabs_str,plabs,rec,pupil_df):
+    dlc_pathfile, snapshot2use = get_dlc_est_path(rec, dlc_filtflag, non_plabs_str, name)
+    _dlc_df = pd.read_hdf(dlc_pathfile)
+    if not plabs:
+        estimates = _dlc_df.head(pupil_df.shape[0])
+    else:
+        estimates = _dlc_df.head(pupil_df.shape[0])
+
+    return estimates
+
+
 class Main:
     def __init__(self,names, date_list, pkl_filename, tdatadir, pupil_dir,
                  pupil_file_tag, pupil_samplerate=60.0,outlier_params=(4, 4), overwrite=False, do_zscore=True,
@@ -205,6 +216,7 @@ class Main:
         # pclass[name].rawTimes = np.array(pdf.index.asi8)
 
         pclass.uniformSample(self.samplerate)
+        pupil_diams_uni = copy(pclass.pupilDiams)
         # remove linear trend
         sess_mean = pclass.pupilDiams.mean()
         try:pclass.pupilDiams = signal.detrend(np.ma.masked_invalid(pclass.pupilDiams))+sess_mean
@@ -212,7 +224,10 @@ class Main:
 
         with HiddenPrints():
             pclass.removeOutliers(n_speed=4, n_size=5)
+            pupil_diams_no_outs = copy(pclass.pupilDiams)
             pclass.interpolate(gapExtension=0.1)
+            pupil_diams_int = copy(pclass.pupilDiams)
+
             pclass.interpolate(gapExtension=0.1)
 
             # filter blocks of nan dat
@@ -236,7 +251,7 @@ class Main:
             elif self.lowtype == 'hanning':
                 if filt_params[0] > 0:
                     pclass.pupilDiams = utils.butter_filter(utils.smooth(pclass.pupilDiams.copy(), int(self.han_size / self.samplerate)),
-                                                            filt_params[0], 1 / self.samplerate, filtype='high')
+                                                            filt_params[0], 1 / self. samplerate, filtype='high')
                 else:
                     pclass.pupilDiams = utils.smooth(pclass.pupilDiams.copy(), int(self.han_size / self.samplerate))
 
@@ -245,7 +260,7 @@ class Main:
 
         # pclass.plot(self.figdir,saveName=f'{name}_{pdf_colname}',)
 
-        return pclass.pupilDiams, pclass.isOutlier, pupil_diams_nozscore
+        return pclass.pupilDiams, pclass.isOutlier, pupil_diams_nozscore,pupil_diams_uni, pupil_diams_no_outs, pupil_diams_int
 
     # @logger.catch
     def load_pdata(self):
@@ -271,6 +286,7 @@ class Main:
                     self.data.pop(name)
             existing_sessions = list(self.data.keys())
             self.data = dict()
+            self.preprocessed = dict()
 
         # elif self.pklname.exists() is False or self.overwrite is True:
         else:
@@ -313,7 +329,7 @@ class Main:
             # self.pool_results = list(tqdm(pool.imap(self.read_and_proccess,self.sessions.keys()),
             #                               total=len(self.sessions)))
 
-            sess2run= [sess for sess in self.sessions if sess not in existing_sessions]
+            sess2run = [sess for sess in self.sessions if sess not in existing_sessions]
             self.pool_results = pool.map(self.read_and_proccess,sess2run)
             # for session in self.sessions:
             # self.read_and_proccess(session,self.sessions[session])
@@ -329,7 +345,7 @@ class Main:
         with open(self.pklname, 'ab') as pklfile:
             logger.info(f'Saving {self.pklname}')
             pickle.dump(self.data, pklfile)
-        with open(self.preprocessed_pklname, 'wb') as pklfile:
+        with open(self.preprocessed_pklname, 'ab') as pklfile:
             pickle.dump(self.preprocessed, pklfile)
 
     def read_and_proccess(self,name:str):
@@ -436,7 +452,7 @@ class Main:
                             cam_ttls = event92_df['Timestamp']
                             zeroed_frameids = rec['FrameID']-rec['FrameID'].iloc[0]
                             print(f'{len(cam_ttls)} ttl frames for {name} {ri} \n'
-                                    f'{len(rec)} frames in rec {name} {ri}')
+                                  f'{len(rec)} frames in rec {name} {ri}')
                             try:
                                 if len(cam_ttls) == len(rec):
                                     matched_ttls_times = cam_ttls
@@ -504,39 +520,18 @@ class Main:
                     sess_recdir = [sess_recdir]
                 _dlc_list = []
                 for rec_ix, rec in enumerate(sess_recdir):
-                    # dlc_estimates_files = []
-                    # if self.dlc_filtflag:
-                    #     dlc_estimates_files_gen = Path(rec).glob(f'{non_plabs_str}'
-                    #                                          f'eye0DLC_resnet50_mice_pupilJul4shuffle1_'
-                    #                                          f'*_filtered.h5')
-                    #     dlc_estimates_files = list(dlc_estimates_files_gen)
-                    # if not len(dlc_estimates_files):
-                    #     dlc_estimates_files_gen = Path(rec).glob(f'{non_plabs_str}'
-                    #                                          f'eye0DLC_resnet50_mice_pupilJul4shuffle1_'
-                    #                                          f'*.h5')
-                    #     dlc_estimates_files = list(dlc_estimates_files_gen)
-                    # # dlc_estimates_files = list(dlc_estimates_files_gen)
-                    # dlc_snapshot_nos = [int(str(estimate_file).replace('_filtered','').split('_')[-1].split('.')[0])
-                    #                     for estimate_file in dlc_estimates_files]
-                    # if not len(dlc_estimates_files):
-                    #     logger.warning(f'missing dlc for {name}')
-                    #     continue
-                    # else:
-                    #     snapshot2use_idx = np.argmax(dlc_snapshot_nos)
-                    #     dlc_pathfile = dlc_estimates_files[snapshot2use_idx]
+
                     dlc_pathfile, snapshot2use = get_dlc_est_path(rec,self.dlc_filtflag,non_plabs_str,name)
                     scorer = f'DLC_resnet50_mice_pupilJul4shuffle1_{snapshot2use}'
                     if dlc_pathfile is not None:
                         try:
-                            _dlc_df = pd.read_hdf(dlc_pathfile)
-                            if not plabs:
-                                _dlc_list.append(_dlc_df.head(animal_pupil_dfs[rec_ix].shape[0]))
-                            else:
-                                _dlc_list.append(_dlc_df.head(animal_pupil_dfs[0].shape[0]))
+                            dlc_estimates = get_dlc_est_files(name, self.dlc_filtflag, non_plabs_str, plabs, rec,
+                                                              animal_pupil_dfs[rec_ix])
 
                         except pd.errors.ParserError:
                             logger.error(str(dlc_pathfile).upper())
                         except IndexError: continue
+                        _dlc_list.append(dlc_estimates)
 
                 if len(_dlc_list) == 0:
                     logger.warning(f'missing dlc for {name}')
@@ -547,7 +542,9 @@ class Main:
                 logger.info(f'loaded dlc for {name}')
                 if plabs:
                     dlc_dfs = [pd.concat(dlc_dfs,axis=0)]
-                assert len(dlc_dfs) == len(animal_pupil_dfs)
+                if len(dlc_dfs) != len(animal_pupil_dfs):
+                    logger.warning(f'CRITICAL ERROR length of dlc mismatch: {name}')
+                    return None,None
                 for ri,dlc_df in enumerate(dlc_dfs):
                     animal_pupil = animal_pupil_dfs[ri]
                     animal_pupil = animal_pupil.dropna()
@@ -620,8 +617,10 @@ class Main:
             print(name)
         for animal_pupil_subset in animal_pupil_subset_dfs:  # process sessions on day separately
             # animal_pupil_subset = animal_pupil_subset.dropna()
+
             pupilclass = pupilDataClass(f'{name}')
             # pupilclass.rawTimes = np.array([e.timestamp() for e in animal_pupil_subset.index])
+            # print(f'{animal_pupil_subset.head() = }')
             try:pupilclass.rawTimes = animal_pupil_subset['timestamp'].values
             except KeyError:
                 logger.error(f'no timestamps for {name}. not processing')
@@ -630,10 +629,10 @@ class Main:
                 unitimes = uniformSample(pupilclass.rawTimes,pupilclass.rawTimes,new_dt=self.samplerate)[1]
                 # uni_timestamps = uniformSample(animal_pupil_subset['timestamp'].values,
                 #                                animal_pupil_subset['timestamp'].values,new_dt=self.samplerate)[1]
-            unitime_ind = [datetime.fromtimestamp(e) for e in unitimes]
-            # pupil_uni = pd.DataFrame([],index=unitime_ind)
-            pupil_uni = pd.DataFrame([],index=unitimes)
-            # pupil_uni['timestamp'] = uni_timestamps
+            # pupil_uni = pd.DataFrame([],index=[datetime.fromtimestamp(e) for e in unitimes])  # dt index
+            pupil_uni = pd.DataFrame([],index=unitimes)  # int index
+            # print(f'{pupil_uni.head() = }')
+            # pupil_uni['timestamp'] = uni_ti  mestamps
             if self.pupil_file_tag == 'pupildata_3d':
                 diam_col = 'diameter_3d'
             elif self.pupil_file_tag == 'pupildata_2d':
@@ -641,19 +640,28 @@ class Main:
             else:
                 break
             outs_list = []
-            cols2process = ['dlc_radii_a','dlc_radii_b','dlc_radii_ab','dlc_EW','dlc_LR',]
+            # cols2process = ['dlc_radii_a','dlc_radii_b','dlc_radii_ab','dlc_EW','dlc_LR',]
+            cols2process = ['dlc_radii_a']
             if self.use_canny_ell:
-                cols2process += ['canny_centre_x','canny_centre_y','canny_raddi_a','canny_raddi_b',]
+                # cols2process += ['canny_centre_x','canny_centre_y','canny_raddi_a','canny_raddi_b',]
+                cols2process += ['canny_centre_x','canny_centre_y','canny_raddi_a',]
             if 'diameter_2d' in animal_pupil_subset.columns:
                 cols2process = cols2process+['rawarea',diam_col,]
             for col2norm in cols2process:
                 pupil_processed = self.process_pupil(pupilclass,f'{name}_{date}',
                                                         animal_pupil_subset, col2norm)
                 pupil_uni[f'{col2norm}_zscored'] = pupil_processed[0][:pupil_uni.shape[0]]
+                pupil_uni[f'{col2norm}_isout'] = pupil_processed[1][:pupil_uni.shape[0]]
                 pupil_uni[f'{col2norm}_processed'] = pupil_processed[2][:pupil_uni.shape[0]]
+                pupil_uni[f'{col2norm}_raw'] = pupil_processed[3][:pupil_uni.shape[0]]
+                pupil_uni[f'{col2norm}_no_outs'] = pupil_processed[4][:pupil_uni.shape[0]]
+                pupil_uni[f'{col2norm}_int'] = pupil_processed[5][:pupil_uni.shape[0]]
+
                 outs_list.append(pupil_processed[1])
-            pupil_uni['isout'],pupil_uni['isout_EW'] = outs_list[3],outs_list[3]
-            pupil_uni['dlc_EW_normed'] = pupil_uni['dlc_EW_processed']/pupil_uni['dlc_LR_processed']
+            pupil_uni['isout'] = pupil_uni[f'{cols2process[0]}_isout']
+            if 'dlc_EW' in cols2process and 'dlc_LR' in cols2process:
+                pupil_uni['dlc_EW_normed'] = pupil_uni['dlc_EW_processed']/pupil_uni['dlc_LR_processed']
+                pupil_uni['isout_EW'] = pupil_uni['dlc_EW_isout']
 
             try:
                 df_cols = pupil_uni.columns
@@ -661,6 +669,7 @@ class Main:
                 cols2use_ix = ['timestamp' in e or 'zscored' in e or 'out' in e or 'processed' in e
                                 or 'normed' in e for e in df_cols]
                 cols2use = df_cols[cols2use_ix]
+                pupil_uni.to_csv(Path(r'/ceph/akrami/Dammy/mouse_pupillometry')/'full_pupil_dump'/f'{name}_{date}_full_pupil.csv')
                 animal_pupil_processed_dfs.append(pupil_uni[cols2use])
             except KeyError:
                 logger.warning(f'KeyError for session {animal,date}')
