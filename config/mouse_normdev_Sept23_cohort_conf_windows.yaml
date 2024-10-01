@@ -1,0 +1,45 @@
+pdatadir_windows: 'X:\Dammy\mouse_pupillometry\mouse_hf'
+pdatadir_linux: '/ceph/akrami/Dammy/mouse_pupillometry/mouse_hf/'
+tdatadir_windows: 'H:\data\Dammy'
+tdatadir_linux: '/nfs/nhome/live/aonih/data/Dammy'
+dirstyle: 'N_D_it'
+# os: unix
+
+dates2process:
+ - '230913' # 76 canny off
+ - '230914' # 72 canny off
+ - '230915'
+ - '230918' # muscimol 1 ul/ul
+ - '230919'  # do71 short video
+ - '230920' # muscimol  76 canny file length different
+ - '230926'
+ - '230927' # muscimol uni for 75/76
+ - '230928' # saline
+ - '230929' # muscimol uni for 76
+ - '231002' # muscimol fluoro
+ - '231023'
+ - '231024' # saline
+ - '231025'
+ - '231027' # saline
+ - '231030' # muscimol 0.5uL
+ - '231031' # control
+ - '231102' # saline. issue with 72. very early event times compared to pupil times
+ - '231103' # muscimol 0.5uL
+# - '231106' # temporary, delete
+
+protocol: 'fam'
+animals2process: ['DO71','DO72','DO75','DO76']
+#animals2process: ['DO72',] #  ['DO71','DO72','DO74','DO75','DO76']
+preprocess_pkl: 'mouse_2309mice_fam_preprocessed_w_suffix.pkl'
+#preprocess_pkl_linux: '/ceph/akrami/Dammy/mouse_pupillometry/pickles/mouse_2309mice_fam_preprocessed.pkl'
+pkl_dir_windows: 'X:\Dammy\mouse_pupillometry\pickles'
+pkl_dir_linux: '/ceph/akrami/Dammy/mouse_pupillometry/pickles'
+do_zscore: true
+bandpass_met: [0.1,4]
+han_size: 0.25
+fs: 90.0
+pdata_topic: 'pupildata_2d'
+use_TTL: true
+pklname_suffix: '2309_batch_w_canny'
+sess_to_redo: []
+use_canny_ell: true
