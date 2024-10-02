@@ -101,6 +101,7 @@ class VideoFrameExtractor:
         all_frames = np.array([frame for frame in video_reader])
         total_frames = len(all_frames)
         frame_indices = np.random.choice(total_frames, 50, replace=False)
+        self.frame_indices = frame_indices
         self.frames = [all_frames[idx] for idx in frame_indices]
         self.current_frame_index = 0
         self.all_points = [[] for _ in range(len(self.frames))]  # Initialize all_points to store points for each frame
@@ -166,7 +167,7 @@ class VideoFrameExtractor:
             writer = csv.writer(file)
             writer.writerow(["Frame"]+sum([[f'x{i}', f'y{i}'] for i in range(1, 9)],[]))
             for i, points in enumerate(self.all_points):
-                writer.writerow([i] + [coord for point in points for coord in point])
+                writer.writerow(self.frame_indices[i] + [coord for point in points for coord in point])
 
         messagebox.showinfo("Info", f"Points saved to {csv_path}")
 
