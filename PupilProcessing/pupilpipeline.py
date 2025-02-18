@@ -4,6 +4,7 @@ import os.path
 
 import pandas as pd
 
+import circle_fit_funcs
 from psychophysicsUtils import *
 import analysis_utils as utils
 from datetime import datetime, time, timedelta
@@ -555,7 +556,7 @@ class Main:
                             logger.warning(f'many missing frames. skipping {name}')
                             continue
                     scorer = dlc_df.columns.get_level_values(0)[0]
-                    dlc_ell = utils.get_dlc_diams(dlc_df,animal_pupil.shape[0],scorer)
+                    dlc_ell = circle_fit_funcs.get_dlc_diams(dlc_df, animal_pupil.shape[0], scorer)
                     dlc_colnames = ['dlc_radii_a','dlc_radii_b','dlc_centre_x',
                                     'dlc_centre_y','dlc_EW','dlc_LR']
                     for colname,coldata in zip(dlc_colnames,dlc_ell):

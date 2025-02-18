@@ -1,5 +1,8 @@
 import time
 import sys
+
+import circle_fit_funcs
+
 sys.path.append("..")
 from pupil_estimate_analysis.manual_frame_evaluation import FrameAnalysis as FrameAnalysis
 from skimage import feature
@@ -296,7 +299,7 @@ if __name__ == "__main__":
     ax2.scatter(edge_x, edge_y,c='y')
     fig2.show()
 
-    (xc,yc),r1,r2 = utils.fit_elipse_extra(np.column_stack((edge_x,edge_y)),'ransac')
+    (xc,yc),r1,r2 = circle_fit_funcs.fit_elipse_extra(np.column_stack((edge_x, edge_y)), 'ransac')
     run.frame_ellipses['canny_ransac'] = np.array([r1,r2,xc,yc])
     t = np.linspace(0, 2 * np.pi, 100)  # Angle values
     Ell = np.array([r2 * np.cos(t), r1 * np.sin(t)])

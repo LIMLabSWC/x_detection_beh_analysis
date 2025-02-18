@@ -1,6 +1,9 @@
 import skvideo.io
 import numpy as np
 import matplotlib
+
+import circle_fit_funcs
+
 matplotlib.use('TkAgg')
 from matplotlib import pyplot as plt
 import pandas as pd
@@ -107,7 +110,7 @@ class FrameAnalysis:
         xy_df = pupil_points_only_df.loc[:, pd.IndexSlice[:, :, ('x', 'y')]].values
         # y_df = pupil_points_only_df.loc[:, pd.IndexSlice[:, :, 'y']].values
         xy_arr = np.array(xy_df)
-        ellispe_estimates = np.array([utils.iterate_fit_ellipse(r,fit_function,plot=self.frame_fig[1].flatten()[i])
+        ellispe_estimates = np.array([circle_fit_funcs.iterate_fit_ellipse(r, fit_function, plot=self.frame_fig[1].flatten()[i])
                                       for i,(_,r) in enumerate(zip(self.frame_fig[1].flatten(),xy_arr))])
         radii1_, radii2_, centersx_, centersy_ = [array.flatten() for array in np.hsplit(ellispe_estimates,4)]
         if self.crop_bbox:
@@ -122,8 +125,8 @@ class FrameAnalysis:
 
 
     def get_dlc_diams_slow(self):
-        dlc_diams = utils.get_dlc_diams(self.dlc_estimates, self.dlc_estimates.shape[0],
-                                        self.dlc_estimates.columns.get_level_values(0)[0])
+        dlc_diams = circle_fit_funcs.get_dlc_diams(self.dlc_estimates, self.dlc_estimates.shape[0],
+                                                   self.dlc_estimates.columns.get_level_values(0)[0])
         _arr = np.array(dlc_diams[:4])
         self.frame_ellipses = _arr[:,self.subset_frame_idx]
 
