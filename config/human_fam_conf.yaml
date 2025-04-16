@@ -1,0 +1,24 @@
+pdatadir_windows: 'X:\Dammy\mouse_pupillometry\mouse_hf'
+pdatadir_linux: '/ceph/akrami/Dammy/mouse_pupillometry/mouse_hf/'
+tdatadir_windows: 'H:\data\Hilde'
+tdatadir_linux: '/nfs/nhome/live/aonih/data/Hilde'
+dirstyle: 'Y_m_d\it'
+os: 'unix'
+
+dates2process: ['220311','220316','220405','220407','220407','220408','220422','220425']
+
+protocol: 'fam'
+animals2process: ['Human20','Human21','Human22','Human23', 'Human24','Human25','Human26','Human27']
+preprocess_pkl: 'mouse_2305mice_fam_preprocessed.pkl'
+pkl_dir: '/ceph/akrami/Dammy/mouse_pupillometry/pickles'
+pkl_dir_windows: 'X:\Dammy\mouse_pupillometry\pickles'
+pkl_dir_linux: '/ceph/akrami/Dammy/mouse_pupillometry/pickles'
+do_zscore: true
+bandpass_met: [0.1,4]
+han_size: 0.15
+fs: 90.0
+pdata_topic: 'pupildata_2d'
+use_TTL: true
+sess_to_redo: []
+pklname_suffix: '2309_batch_w_canny'
+use_canny_ell: false

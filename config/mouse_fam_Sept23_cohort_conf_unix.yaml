@@ -1,0 +1,30 @@
+pdatadir: '/ceph/akrami/Dammy/mouse_pupillometry/mouse_hf/'
+tdatadir: '/nfs/nhome/live/aonih/data/Dammy'
+dirstyle: 'N_D_it'
+os: unix
+
+dates2process:
+#  - '230913'
+#  - '230914'
+#  - '230915'
+#  - '230918' # muscimol 1 ul/ul
+#  - '230919'
+#  - '230920' # muscimol
+#  - '230926'
+#  - '230927' # muscimol uni for 75/76
+#  - '230928' # saline
+#  - '230929' # muscimol uni for 76
+ - '231002' # muscimol fluoro
+
+protocol: 'fam'
+animals2process: ['DO75'] #  ['DO71','DO72','DO74','DO75','DO76']
+preprocess_pkl: '/ceph/akrami/Dammy/mouse_pupillometry/pickles/mouse_2309mice_fam_preprocessed.pkl'
+pkl_dir: '/ceph/akrami/Dammy/mouse_pupillometry/pickles'
+do_zscore: true
+bandpass_met: [0.0,4]
+han_size: 0.15
+fs: 90.0
+pdata_topic: 'pupildata_2d'
+use_TTL: true
+pklname_suffix: '2309_batch'
+sess_to_redo: []
