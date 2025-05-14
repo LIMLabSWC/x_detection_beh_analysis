@@ -245,10 +245,13 @@ class Main:
 
             # pclass.pupilDiams = utils.smooth(pclass.pupilDiams,int(self.han_size/self.samplerate))
             if self.lowtype == 'filter':
-                if filt_params[0] > 0 :
+                if filt_params[0] > 0 and filt_params[1] > 0:
                     pclass.pupilDiams = utils.butter_filter(pclass.pupilDiams, filt_params, 1 / self.samplerate, filtype='band',)
-                else:
+                elif filt_params[1] > 0:
                     pclass.pupilDiams = utils.butter_filter(pclass.pupilDiams, filt_params[1], 1 / self.samplerate, filtype='low')
+                else:
+                    pass
+                
             elif self.lowtype == 'hanning':
                 if filt_params[0] > 0:
                     pclass.pupilDiams = utils.butter_filter(utils.smooth(pclass.pupilDiams.copy(), int(self.han_size / self.samplerate)),
